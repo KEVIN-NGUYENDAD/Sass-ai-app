@@ -1,11 +1,127 @@
-from flask import Flask, request
+from flask import Flask, request, render_template_string
 from agent import ai_agent
 
 app = Flask(__name__)
 
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>💊 Hương Pharmacy AI Copilot</title>
+
+<style>
+body{
+    background:#f4f7f9;
+    font-family:"Segoe UI",sans-serif;
+}
+
+.container{
+    width:85%;
+    margin:auto;
+    padding:20px;
+}
+
+h1{
+    color:#0f766e;
+}
+
+textarea{
+    width:100%;
+    height:180px;
+    padding:15px;
+    border-radius:10px;
+    font-size:18px;
+}
+
+button{
+    background:#0f766e;
+    color:white;
+    border:none;
+    padding:12px 25px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.user{
+    background:white;
+    padding:15px;
+    margin-top:20px;
+    border-radius:10px;
+}
+
+.ai{
+    background:#ecfeff;
+    padding:15px;
+    margin-top:20px;
+    border-radius:10px;
+}
+
+.response{
+    white-space:pre-wrap;
+    line-height:1.8;
+    font-size:18px;
+}
+
+.warning{
+    margin-top:20px;
+    background:#fef3c7;
+    padding:10px;
+    border-radius:8px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+
+<h1>💊 Hương Pharmacy AI Copilot</h1>
+
+<p>Drug Information • Drug Interaction • Quiz Mode</p>
+
+<form method="POST">
+
+<textarea
+name="prompt"
+placeholder="Ask a pharmacy question..."></textarea>
+
+<br><br>
+
+<button type="submit">
+Ask AI
+</button>
+
+</form>
+
+{% if prompt %}
+<div class="user">
+<h3>Question</h3>
+<div>{{ prompt }}</div>
+</div>
+{% endif %}
+
+{% if response %}
+<div class="ai">
+<h3>💊 Hương AI Response</h3>
+<div class="response">{{ response }}</div>
+</div>
+{% endif %}
+
+<div class="warning">
+⚠ Educational Use Only. This AI does not replace doctors or pharmacists.
+</div>
+
+</div>
+
+</body>
+</html>
+"""
+
 @app.route("/", methods=["GET", "POST"])
 def home():
 
+    prompt = ""
     response = ""
 
     if request.method == "POST":
@@ -18,9 +134,48 @@ def home():
                 "content": """
 You are Huong Pharmacy AI Copilot.
 
-Always answer in Vietnamese and English.
+You are an expert in:
+
+- Clinical Pharmacy
+- Pharmacology
+- Drug Information
+- Drug Interactions
+- Medication Safety
+- Patient Counseling
+
+Always answer in BOTH Vietnamese and English.
+
+Format:
+
+🇻🇳 TIẾNG VIỆT
+
+<answer>
+
+----------------------------
+
+🇺🇸 ENGLISH
+
+<answer>
+
+For drug interactions provide:
+
+- Severity
+- Clinical Impact
+- Monitoring
+- Recommendations
+
+For quizzes provide:
+
+- Question
+- A B C D choices
+- Correct Answer
+- Explanation
 
 Never diagnose diseases.
+
+Never prescribe medications.
+
+Encourage consultation with healthcare professionals.
 """
             },
             {
@@ -31,26 +186,11 @@ Never diagnose diseases.
 
         response = ai_agent(messages)
 
-    return f"""
-    <html>
-    <head>
-    <title>Huong Pharmacy AI Copilot</title>
-    </head>
-    <body>
-
-    <h1>💊 Huong Pharmacy AI Copilot</h1>
-
-    <form method="POST">
-        <textarea name="prompt" rows="8" cols="80"></textarea>
-        <br><br>
-        <button type="submit">Ask AI</button>
-    </form>
-
-    <pre>{response}</pre>
-
-    </body>
-    </html>
-    """
+    return render_template_string(
+        HTML,
+        prompt=prompt,
+        response=response
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
