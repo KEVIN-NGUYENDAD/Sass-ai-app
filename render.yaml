@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: huong-pharmacy-ai-copilot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
