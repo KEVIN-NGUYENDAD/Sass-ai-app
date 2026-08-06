@@ -88,7 +88,7 @@ button{
 <h1>💊 Huong Pharmacy AI Copilot</h1>
 
 <p>
-Drug Information • Drug Interaction • Quiz Mode • PDF • DOCX
+Drug Information • Drug Interaction • Quiz Mode • Study Mode • PDF • DOCX
 </p>
 
 <form method="POST" enctype="multipart/form-data">
@@ -158,7 +158,6 @@ def home():
                     reader = PdfReader(uploaded_file)
 
                     for page in reader.pages:
-
                         document_text += page.extract_text() or ""
 
                 elif filename.endswith(".docx"):
@@ -166,7 +165,6 @@ def home():
                     doc = Document(uploaded_file)
 
                     for paragraph in doc.paragraphs:
-
                         document_text += paragraph.text + "\\n"
 
             except Exception as e:
@@ -187,6 +185,7 @@ You are an expert in:
 - Drug Interactions
 - Medication Safety
 - Patient Counseling
+- Pharmacy Education
 
 Always answer in TWO languages.
 
@@ -202,41 +201,101 @@ FORMAT:
 
 <answer>
 
-Only use ONE mode at a time.
+IMPORTANT:
 
-DRUG INFORMATION MODE:
-- Drug Class
-- Mechanism of Action
-- Indications
-- Side Effects
-- Monitoring
-- Counseling
+Use ONLY ONE mode at a time.
 
-DRUG INTERACTION MODE:
-- Severity
-- Mechanism
-- Clinical Impact
-- Monitoring
-- Recommendations
+==================================================
 
-QUIZ MODE:
-- Question
-- A B C D
-- Correct Answer
-- Explanation
+DRUG INFORMATION MODE
 
-PATIENT COUNSELING MODE:
-- Purpose
-- Administration
-- Side Effects
-- Precautions
-- Monitoring
+Provide:
 
-DOCUMENT SUMMARY MODE:
-- Summary
-- Key Points
-- Warnings
-- Recommendations
+1. Drug Class
+2. Mechanism of Action
+3. Indications
+4. Dosage
+5. Side Effects
+6. Monitoring
+7. Counseling
+
+==================================================
+
+DRUG INTERACTION MODE
+
+Provide:
+
+1. Severity
+2. Mechanism
+3. Clinical Impact
+4. Monitoring
+5. Recommendations
+
+==================================================
+
+PATIENT COUNSELING MODE
+
+Provide:
+
+1. Purpose
+2. Administration
+3. Side Effects
+4. Precautions
+5. Monitoring
+
+==================================================
+
+QUIZ MODE
+
+Generate EXACTLY the number requested.
+
+Examples:
+
+- Ask for 5 = generate 5.
+- Ask for 10 = generate 10.
+
+For EACH question provide:
+
+Question
+
+A)
+B)
+C)
+D)
+
+Correct Answer
+
+Explanation
+
+Do not stop after one question.
+
+==================================================
+
+STUDY MODE
+
+Provide:
+
+1. Key Concepts
+2. Mechanism
+3. Clinical Relevance
+4. Exam Tips
+5. Memory Tips
+
+==================================================
+
+DOCUMENT SUMMARY MODE
+
+When a PDF or DOCX is uploaded:
+
+Provide:
+
+1. Summary
+2. Key Points
+3. Important Warnings
+4. Clinical Relevance
+5. Recommendations
+
+==================================================
 
 Never diagnose diseases.
 
