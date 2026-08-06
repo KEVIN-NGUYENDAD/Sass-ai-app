@@ -1,5 +1,7 @@
 from flask import Flask, request, render_template_string
 from agent import ai_agent
+from pypdf import PdfReader
+from docx import Document
 
 app = Flask(__name__)
 
@@ -13,7 +15,7 @@ HTML = """
 <style>
 
 body{
-    font-family: "Segoe UI", Arial, sans-serif;
+    font-family:"Segoe UI",Arial,sans-serif;
     background:#f4f7f9;
     margin:0;
 }
@@ -35,6 +37,10 @@ textarea{
     border-radius:10px;
     border:1px solid #ccc;
     font-size:16px;
+}
+
+input[type=file]{
+    margin-top:15px;
 }
 
 button{
@@ -82,14 +88,18 @@ button{
 <h1>💊 Huong Pharmacy AI Copilot</h1>
 
 <p>
-Drug Information • Drug Interaction • Quiz Mode
+Drug Information • Drug Interaction • Quiz Mode • PDF • DOCX
 </p>
 
-<form method="POST">
+<form method="POST" enctype="multipart/form-data">
 
 <textarea
 name="prompt"
 placeholder="Ask a pharmacy question..."></textarea>
+
+<br><br>
+
+<input type="file" name="file">
 
 <br><br>
 
@@ -132,6 +142,36 @@ def home():
     if request.method == "POST":
 
         prompt = request.form.get("prompt", "")
+
+        uploaded_file = request.files.get("file")
+
+        document_text = ""
+
+        if uploaded_file and uploaded_file.filename:
+
+            filename = uploaded_file.filename.lower()
+
+            try:
+
+                if filename.endswith(".pdf"):
+
+                    reader = PdfReader(uploaded_file)
+
+                    for page in reader.pages:
+
+                        document_text += page.extract_text() or ""
+
+                elif filename.endswith(".docx"):
+
+                    doc = Document(uploaded_file)
+
+                    for paragraph in doc.paragraphs:
+
+                        document_text += paragraph.text + "\\n"
+
+            except Exception as e:
+
+                document_text = f"Document Error: {e}"
 
         messages = [
             {
@@ -192,6 +232,12 @@ PATIENT COUNSELING MODE:
 - Precautions
 - Monitoring
 
+DOCUMENT SUMMARY MODE:
+- Summary
+- Key Points
+- Warnings
+- Recommendations
+
 Never diagnose diseases.
 
 Never prescribe medications.
@@ -201,7 +247,17 @@ Encourage professional healthcare consultation.
             },
             {
                 "role": "user",
-                "content": prompt
+                "content": f"""
+
+Question:
+
+{prompt}
+
+Uploaded Document:
+
+{document_text}
+
+"""
             }
         ]
 
