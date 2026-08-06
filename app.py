@@ -8,12 +8,14 @@ HTML = """
 <html>
 <head>
 <meta charset="UTF-8">
-<title>💊 Hương Pharmacy AI Copilot</title>
+<title>💊 Huong Pharmacy AI Copilot</title>
 
 <style>
+
 body{
+    font-family: "Segoe UI", Arial, sans-serif;
     background:#f4f7f9;
-    font-family:"Segoe UI",sans-serif;
+    margin:0;
 }
 
 .container{
@@ -31,36 +33,36 @@ textarea{
     height:180px;
     padding:15px;
     border-radius:10px;
-    font-size:18px;
+    border:1px solid #ccc;
+    font-size:16px;
 }
 
 button{
     background:#0f766e;
     color:white;
     border:none;
-    padding:12px 25px;
+    padding:12px 20px;
     border-radius:8px;
     cursor:pointer;
 }
 
 .user{
     background:white;
-    padding:15px;
     margin-top:20px;
+    padding:15px;
     border-radius:10px;
 }
 
 .ai{
     background:#ecfeff;
-    padding:15px;
     margin-top:20px;
+    padding:15px;
     border-radius:10px;
 }
 
 .response{
     white-space:pre-wrap;
     line-height:1.8;
-    font-size:18px;
 }
 
 .warning{
@@ -69,16 +71,19 @@ button{
     padding:10px;
     border-radius:8px;
 }
-</style>
 
+</style>
 </head>
+
 <body>
 
 <div class="container">
 
-<h1>💊 Hương Pharmacy AI Copilot</h1>
+<h1>💊 Huong Pharmacy AI Copilot</h1>
 
-<p>Drug Information • Drug Interaction • Quiz Mode</p>
+<p>
+Drug Information • Drug Interaction • Quiz Mode
+</p>
 
 <form method="POST">
 
@@ -103,7 +108,7 @@ Ask AI
 
 {% if response %}
 <div class="ai">
-<h3>💊 Hương AI Response</h3>
+<h3>💊 Huong AI Response</h3>
 <div class="response">{{ response }}</div>
 </div>
 {% endif %}
@@ -143,9 +148,9 @@ You are an expert in:
 - Medication Safety
 - Patient Counseling
 
-Always answer in BOTH Vietnamese and English.
+Always answer in TWO languages.
 
-Format:
+FORMAT:
 
 🇻🇳 TIẾNG VIỆT
 
@@ -157,25 +162,41 @@ Format:
 
 <answer>
 
-For drug interactions provide:
+Only use ONE mode at a time.
 
+DRUG INFORMATION MODE:
+- Drug Class
+- Mechanism of Action
+- Indications
+- Side Effects
+- Monitoring
+- Counseling
+
+DRUG INTERACTION MODE:
 - Severity
+- Mechanism
 - Clinical Impact
 - Monitoring
 - Recommendations
 
-For quizzes provide:
-
+QUIZ MODE:
 - Question
-- A B C D choices
+- A B C D
 - Correct Answer
 - Explanation
+
+PATIENT COUNSELING MODE:
+- Purpose
+- Administration
+- Side Effects
+- Precautions
+- Monitoring
 
 Never diagnose diseases.
 
 Never prescribe medications.
 
-Encourage consultation with healthcare professionals.
+Encourage professional healthcare consultation.
 """
             },
             {
