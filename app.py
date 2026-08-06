@@ -1,46 +1,56 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request
 from agent import ai_agent
 
 app = Flask(__name__)
 
-HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>💊 Hương Pharmacy AI Copilot</title>
+@app.route("/", methods=["GET", "POST"])
+def home():
 
-<style>
+    response = ""
 
-body{
-    background:#f4f7f9;
-    font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;
-}
+    if request.method == "POST":
 
-.container{
-    width:85%;
-    margin:auto;
-    padding:20px;
-}
+        prompt = request.form.get("prompt", "")
 
-h1{
-    color:#0f766e;
-    font-size:48px;
-}
+        messages = [
+            {
+                "role": "system",
+                "content": """
+You are Huong Pharmacy AI Copilot.
 
-.subtitle{
-    font-size:22px;
-    margin-bottom:20px;
-}
+Always answer in Vietnamese and English.
 
-textarea{
-    width:100%;
-    height:180px;
-    padding:15px;
-    border-radius:10px;
-    border:1px solid #ccc;
-    font-size:18px;
-}
+Never diagnose diseases.
+"""
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
 
-button{
-    
+        response = ai_agent(messages)
+
+    return f"""
+    <html>
+    <head>
+    <title>Huong Pharmacy AI Copilot</title>
+    </head>
+    <body>
+
+    <h1>💊 Huong Pharmacy AI Copilot</h1>
+
+    <form method="POST">
+        <textarea name="prompt" rows="8" cols="80"></textarea>
+        <br><br>
+        <button type="submit">Ask AI</button>
+    </form>
+
+    <pre>{response}</pre>
+
+    </body>
+    </html>
+    """
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
