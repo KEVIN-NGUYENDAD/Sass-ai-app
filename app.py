@@ -128,10 +128,16 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             border-radius: 6px;
             border-left: 3px solid #667eea;
         }
-        .quiz-question {
+        .quiz-question-box {
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            min-height: 40px;
+            display: block !important;
             font-size: 13px;
+            line-height: 1.4;
         }
         .quiz-options {
             display: flex;
@@ -139,13 +145,14 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             gap: 6px;
         }
         .quiz-option {
-            padding: 6px 10px;
+            padding: 8px 12px;
             background: #f9f9f9;
             border: 1px solid #ddd;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s;
             font-size: 12px;
+            text-align: center;
         }
         .quiz-option:hover {
             background: #667eea;
@@ -153,14 +160,15 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             border-color: #667eea;
         }
         .quiz-answer {
-            margin-top: 8px;
-            padding: 8px;
+            margin-top: 10px;
+            padding: 10px;
             background: #e8f5e9;
             border-left: 3px solid #4caf50;
             border-radius: 4px;
             font-size: 12px;
             color: #2e7d32;
             display: none;
+            line-height: 1.5;
         }
         .quiz-answer.show {
             display: block;
@@ -263,14 +271,19 @@ HTML_CHATBOX = '''<!DOCTYPE html>
                         
                         content.quiz.forEach((q, idx) => {
                             const qId = 'q' + idx;
-                            html += `<div class="quiz-item">
+                            html += `<div class="quiz-item">`;
+                            
+                            // QUESTION BOX - FIX FOR Q1-Q5
+                            html += `<div class="quiz-question-box">
                                 <div class="language-tabs" style="margin-bottom: 8px;">
                                     <button class="tab-button active" onclick="switchQuizTab(this, '${qId}_vi')">🇻🇳 VN</button>
                                     <button class="tab-button" onclick="switchQuizTab(this, '${qId}_en')">🇬🇧 EN</button>
                                 </div>
-                                <div class="quiz-question tab-content active" id="${qId}_vi">${q.question_vi}</div>
-                                <div class="quiz-question tab-content" id="${qId}_en">${q.question_en}</div>`;
+                                <div class="tab-content active" id="${qId}_vi">${q.question_vi}</div>
+                                <div class="tab-content" id="${qId}_en">${q.question_en}</div>
+                            </div>`;
                             
+                            // OPTIONS
                             if (q.type === 'multiple_choice') {
                                 html += `<div class="quiz-options">`;
                                 q.options.forEach(opt => {
@@ -284,6 +297,7 @@ HTML_CHATBOX = '''<!DOCTYPE html>
                                 </div>`;
                             }
                             
+                            // ANSWER BOX
                             html += `<div class="quiz-answer" id="${qId}_answer">
                                 <strong>✅ Đáp án / Answer:</strong> ${q.correct || q.correct_answer_vi}<br>
                                 <strong>📖 Giải thích / Explanation:</strong> ${q.explanation_vi} / ${q.explanation_en}
@@ -319,10 +333,10 @@ HTML_CHATBOX = '''<!DOCTYPE html>
         }
         
         function switchQuizTab(button, lang) {
-            const parent = button.closest('.quiz-item');
+            const parent = button.closest('.quiz-question-box');
             parent.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
             button.classList.add('active');
-            parent.querySelectorAll('.quiz-question').forEach(c => c.classList.remove('active'));
+            parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             parent.querySelector('#' + lang).classList.add('active');
         }
         
