@@ -1,5 +1,7 @@
 flask
-groq
+grpc
 gunicorn
 PyPDF2==2.12.1
 python-docx
+requests
+python-dotenv
