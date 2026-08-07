@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__, static_folder='.', template_folder='.')
 
-HTML_CHATBOX = '''<!DOCTYPE html>
+HTML_CHATBOX = """<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -106,71 +106,15 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             border-top: 1px solid #ddd;
             font-style: italic;
         }
-        .quiz-section {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 2px solid #667eea;
-            background: #f0f4ff;
-            border-radius: 8px;
-            padding: 12px;
-        }
-        .quiz-title {
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        .quiz-item {
-            margin-bottom: 12px;
+        .explanation-box {
+            margin-top: 12px;
             padding: 10px;
-            background: white;
-            border-radius: 6px;
+            background: #e3f2fd;
             border-left: 3px solid #667eea;
-        }
-        .quiz-question-box {
-            font-weight: bold;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 4px;
-            min-height: 40px;
-            display: block !important;
-            font-size: 13px;
-            line-height: 1.4;
-        }
-        .quiz-options {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .quiz-option {
-            padding: 8px 12px;
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 12px;
-            text-align: center;
-        }
-        .quiz-option:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        .quiz-answer {
-            margin-top: 10px;
-            padding: 10px;
-            background: #e8f5e9;
-            border-left: 3px solid #4caf50;
             border-radius: 4px;
             font-size: 12px;
-            color: #2e7d32;
-            display: none;
+            color: #1565c0;
             line-height: 1.5;
-        }
-        .quiz-answer.show {
-            display: block;
         }
         .not-found { background: #fff3cd; border-left-color: #ff9800; }
         .input-area {
@@ -211,13 +155,13 @@ HTML_CHATBOX = '''<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            💬 Chat
+            Chat
         </div>
         <div class="chat-box" id="chatBox"></div>
         <div class="input-area">
             <div class="input-wrapper">
-                <input type="text" id="questionInput" placeholder="Hỏi về dược phẩm... / Ask about pharmaceuticals..." onkeypress="handleKeyPress(event)">
-                <button onclick="sendQuestion()">📤 Gửi / Send</button>
+                <input type="text" id="questionInput" placeholder="Hoi ve duoc pham..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendQuestion()">Send</button>
             </div>
         </div>
     </div>
@@ -240,82 +184,37 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             .then(data => addMessage(data, 'bot'))
             .catch(e => {
                 console.error(e);
-                addMessage({found: false, answer_vi: 'Lỗi kết nối', answer_en: 'Connection error', citation: 'N/A'}, 'bot');
+                addMessage({found: false, answer_vi: 'Loi ket noi', answer_en: 'Connection error', citation: 'N/A', explanation_vi: '', explanation_en: ''}, 'bot');
             });
         }
         
         function addMessage(content, type) {
             const div = document.createElement('div');
-            div.className = `message ${type}-message`;
+            div.className = 'message ' + type + '-message';
             
             if (type === 'user') {
-                div.innerHTML = `<div class="content">${escapeHtml(content)}</div>`;
+                div.innerHTML = '<div class="content">' + escapeHtml(content) + '</div>';
             } else {
-                let html = `<div class="content ${content.found ? '' : 'not-found'}">`;
+                let html = '<div class="content ' + (content.found ? '' : 'not-found') + '">';
                 
                 if (content.found) {
-                    html += `
-                        <div class="language-tabs">
-                            <button class="tab-button active" onclick="switchTab(this, 'vi')">🇻🇳 Tiếng Việt</button>
-                            <button class="tab-button" onclick="switchTab(this, 'en')">🇬🇧 English</button>
-                        </div>
-                        <div class="tab-content active" id="vi">${content.answer_vi.replace(/\\n/g, '<br>')}</div>
-                        <div class="tab-content" id="en">${content.answer_en.replace(/\\n/g, '<br>')}</div>
-                        <div class="citation">📍 ${content.citation}</div>
-                    `;
-                    
-                    if (content.quiz && content.quiz.length > 0) {
-                        html += `<div class="quiz-section"><div class="quiz-title">📝 QUIZ OÂN TẬP / PRACTICE QUIZ</div>`;
-                        
-                        content.quiz.forEach((q, idx) => {
-                            const qId = 'q' + idx;
-                            html += `<div class="quiz-item">`;
-                            
-                            // QUESTION BOX
-                            html += `<div class="quiz-question-box">
-                                <div class="language-tabs" style="margin-bottom: 8px;">
-                                    <button class="tab-button active" onclick="switchQuizTab(this, '${qId}_vi')">🇻🇳 VN</button>
-                                    <button class="tab-button" onclick="switchQuizTab(this, '${qId}_en')">🇬🇧 EN</button>
-                                </div>
-                                <div class="tab-content active" id="${qId}_vi">${q.question_vi}</div>
-                                <div class="tab-content" id="${qId}_en">${q.question_en}</div>
-                            </div>`;
-                            
-                            // OPTIONS
-                            if (q.type === 'multiple_choice') {
-                                html += `<div class="quiz-options">`;
-                                q.options.forEach(opt => {
-                                    html += `<button class="quiz-option" onclick="checkAnswer(this, '${q.correct}', '${qId}')">${opt}</button>`;
-                                });
-                                html += `</div>`;
-                            } else if (q.type === 'true_false') {
-                                html += `<div class="quiz-options">
-                                    <button class="quiz-option" onclick="checkAnswer(this, 'True', '${qId}')">True / Đúng</button>
-                                    <button class="quiz-option" onclick="checkAnswer(this, 'False', '${qId}')">False / Sai</button>
-                                </div>`;
-                            }
-                            
-                            // ANSWER BOX
-                            html += `<div class="quiz-answer" id="${qId}_answer">
-                                <strong>✅ Đáp án / Answer:</strong> ${q.correct || q.correct_answer_vi}<br>
-                                <strong>📖 Giải thích / Explanation:</strong> ${q.explanation_vi} / ${q.explanation_en}
-                            </div></div>`;
-                        });
-                        
-                        html += `</div>`;
-                    }
+                    html += '<div class="language-tabs">';
+                    html += '<button class="tab-button active" onclick="switchTab(this,' + "'vi'" + ')">VN</button>';
+                    html += '<button class="tab-button" onclick="switchTab(this,' + "'en'" + ')">EN</button>';
+                    html += '</div>';
+                    html += '<div class="tab-content active" id="vi">' + content.answer_vi.replace(/\n/g, '<br>') + '</div>';
+                    html += '<div class="tab-content" id="en">' + content.answer_en.replace(/\n/g, '<br>') + '</div>';
+                    html += '<div class="citation">' + content.citation + '</div>';
                 } else {
-                    html += `
-                        <div class="language-tabs">
-                            <button class="tab-button active" onclick="switchTab(this, 'vi')">🇻🇳 Tiếng Việt</button>
-                            <button class="tab-button" onclick="switchTab(this, 'en')">🇬🇧 English</button>
-                        </div>
-                        <div class="tab-content active" id="vi">${content.answer_vi.replace(/\\n/g, '<br>')}</div>
-                        <div class="tab-content" id="en">${content.answer_en.replace(/\\n/g, '<br>')}</div>
-                    `;
+                    html += '<div class="language-tabs">';
+                    html += '<button class="tab-button active" onclick="switchTab(this,' + "'vi'" + ')">VN</button>';
+                    html += '<button class="tab-button" onclick="switchTab(this,' + "'en'" + ')">EN</button>';
+                    html += '</div>';
+                    html += '<div class="tab-content active" id="vi">' + content.answer_vi.replace(/\n/g, '<br>') + '</div>';
+                    html += '<div class="tab-content" id="en">' + content.answer_en.replace(/\n/g, '<br>') + '</div>';
                 }
                 
-                html += `</div>`;
+                html += '</div>';
                 div.innerHTML = html;
             }
             
@@ -330,4 +229,77 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             button.parentElement.parentElement.querySelector('#' + lang).classList.add('active');
         }
         
-        function switchQuizTab(button, lang) {
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') sendQuestion();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        window.addEventListener('load', () => {
+            addMessage({
+                found: false,
+                answer_vi: 'Xin chao! Hoi toi ve duoc pham. Toi se tra loi tu 2 file PDF co san.',
+                answer_en: 'Hello! Ask me about pharmaceuticals. I will answer from 2 PDF files.',
+                explanation_vi: '',
+                explanation_en: '',
+                citation: 'System'
+            }, 'bot');
+        });
+    </script>
+</body>
+</html>"""
+
+@app.route('/', methods=['GET'])
+def chatbox():
+    return HTML_CHATBOX
+
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    data = request.json
+    question = data.get('question', '').strip()
+    
+    if not question:
+        return jsonify({
+            'found': False,
+            'answer_vi': 'Loi: Cau hoi trong!',
+            'answer_en': 'Error: Empty question!',
+            'explanation_vi': '',
+            'explanation_en': '',
+            'citation': 'N/A'
+        }), 400
+    
+    response = ai_agent(question)
+    return jsonify(response), 200
+
+@app.route('/query', methods=['GET'])
+def query():
+    question = request.args.get('q', '').strip()
+    
+    if not question:
+        return jsonify({'error': 'Missing question parameter'}), 400
+    
+    response = ai_agent(question)
+    
+    return jsonify({
+        'question': question,
+        'answer': response.get('answer_vi', 'No answer'),
+        'found': response.get('found', False),
+        'citation': response.get('citation', 'N/A')
+    }), 200
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({
+        'status': 'ok',
+        'app': 'Huong Pharmacy AI Copilot',
+        'version': '4.0',
+        'features': ['Chat', 'PDF Answer', 'Explanation']
+    }), 200
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
