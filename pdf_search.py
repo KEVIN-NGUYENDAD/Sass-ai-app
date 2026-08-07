@@ -4,7 +4,7 @@ from PyPDF2 import PdfReader
 
 PDF_FILES = [
     "B1_Hoa-Duoc-Biopharmaceuticals-2027.pdf",
-    "B2_Duoc_ly-Biopharmaceuticals-2026.pdf"
+    "B2_Duoc ly-Biopharmaceuticals-2026.pdf"
 ]
 
 def search_pdf(query):

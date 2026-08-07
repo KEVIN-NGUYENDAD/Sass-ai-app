@@ -259,7 +259,7 @@ def chatbox():
 
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     question = data.get('question', '').strip()
     
     if not question:
