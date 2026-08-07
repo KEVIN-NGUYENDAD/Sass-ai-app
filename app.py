@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template_string
 from agent import ai_agent
-from pypdf import PdfReader
+from PyPDF2 import PdfReader
 from docx import Document
 
 app = Flask(__name__)
