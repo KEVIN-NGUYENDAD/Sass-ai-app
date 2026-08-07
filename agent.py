@@ -1,3 +1,12 @@
+import os
+
+from groq import Groq
+from pdf_search import search_pdf
+
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
+)
+
 def ai_agent(user_question):
 
     if isinstance(user_question, list):
