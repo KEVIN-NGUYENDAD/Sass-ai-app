@@ -1,46 +1,62 @@
-# agent.py - improved
-
 from pdf_search import search_pdf
-import textwrap
-
 
 def ai_agent(user_question):
     """
-    Query agent: search PDFs + return answer with citation
-    Returns a plain text response describing the match or a not-found message.
+    Bilingual agent: VN + EN, with PDF citation
     """
-    if not user_question or not str(user_question).strip():
-        return "Error: Empty question"
-
-    try:
-        result = search_pdf(user_question)
-    except Exception as e:
-        return f"Error: Exception while searching PDFs: {e}"
-
-    if not isinstance(result, dict):
-        return "Error: invalid result from search_pdf"
-
+    if not user_question:
+        return {
+            "found": False,
+            "answer_vi": "Lỗi: Câu hỏi trống!",
+            "answer_en": "Error: Empty question!",
+            "citation": "N/A"
+        }
+    
+    result = search_pdf(user_question)
+    
     if result.get("found"):
-        # Found in PDF
-        file = result.get("file", "Unknown")
-        page = result.get("page", "Unknown")
-        content = result.get("content", "") or ""
-        snippet = content[:500]
+        file = result["file"]
+        page = result["page"]
+        content = result["content"]
+        score = result.get("score", 0)
+        
+        pdf_display = file.replace("_", " ").replace("-", " ").replace(".pdf", "")
+        
+        return {
+            "found": True,
+            "question": user_question,
+            "answer_vi": f"""📚 **TRỌ TRỢ DƯỢC HỌC**
 
-        return textwrap.dedent(f"""\
-        ANSWER FOUND:
-        File: {file}
-        Page: {page}
-        Content: {snippet}...
+**Câu hỏi:** {user_question}
 
-        Citation: {file} - Page {page}
-        """)
+**Nội dung từ PDF:**
+{content}...
+
+**Chi tiết:**
+- File: {pdf_display}
+- Trang: {page}""",
+            
+            "answer_en": f"""📚 **PHARMACEUTICAL ASSISTANT**
+
+**Question:** {user_question}
+
+**Content from PDF:**
+{content}...
+
+**Details:**
+- File: {pdf_display}
+- Page: {page}""",
+            
+            "citation": f"{pdf_display}, Page {page}",
+            "file": file,
+            "page": page
+        }
+    
     else:
-        # NOT FOUND
-        message = result.get("message", "NOT FOUND")
-        return textwrap.dedent(f"""\
-        {message}
-
-        Question: {user_question}
-        Status: No relevant information in knowledge base
-        """)
+        return {
+            "found": False,
+            "question": user_question,
+            "answer_vi": f"❌ Không tìm thấy: '{user_question}'",
+            "answer_en": f"❌ Not found: '{user_question}'",
+            "citation": "No source"
+        }
