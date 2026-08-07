@@ -9,7 +9,7 @@ HTML_CHATBOX = '''<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trợ Lý Dược Học - Pharmaceutical Assistant</title>
+    <title>Chat</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -33,14 +33,13 @@ HTML_CHATBOX = '''<!DOCTYPE html>
             max-height: 900px;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #667eea;
             color: white;
-            padding: 20px;
+            padding: 10px;
             border-radius: 15px 15px 0 0;
             text-align: center;
+            font-size: 12px;
         }
-        .header h1 { font-size: 24px; margin-bottom: 5px; }
-        .header p { font-size: 14px; opacity: 0.9; }
         .chat-box {
             flex: 1;
             overflow-y: auto;
@@ -212,8 +211,7 @@ HTML_CHATBOX = '''<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏥 Trợ Lý Dược Học</h1>
-            <p>Pharmaceutical Assistant | Song ngữ Việt-Anh + Quiz Ôn Tập</p>
+            💬 Chat
         </div>
         <div class="chat-box" id="chatBox"></div>
         <div class="input-area">
@@ -267,13 +265,13 @@ HTML_CHATBOX = '''<!DOCTYPE html>
                     `;
                     
                     if (content.quiz && content.quiz.length > 0) {
-                        html += `<div class="quiz-section"><div class="quiz-title">📝 QUIZ ÔN TẬP / PRACTICE QUIZ</div>`;
+                        html += `<div class="quiz-section"><div class="quiz-title">📝 QUIZ OÂN TẬP / PRACTICE QUIZ</div>`;
                         
                         content.quiz.forEach((q, idx) => {
                             const qId = 'q' + idx;
                             html += `<div class="quiz-item">`;
                             
-                            // QUESTION BOX - FIX FOR Q1-Q5
+                            // QUESTION BOX
                             html += `<div class="quiz-question-box">
                                 <div class="language-tabs" style="margin-bottom: 8px;">
                                     <button class="tab-button active" onclick="switchQuizTab(this, '${qId}_vi')">🇻🇳 VN</button>
@@ -333,86 +331,3 @@ HTML_CHATBOX = '''<!DOCTYPE html>
         }
         
         function switchQuizTab(button, lang) {
-            const parent = button.closest('.quiz-question-box');
-            parent.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            parent.querySelector('#' + lang).classList.add('active');
-        }
-        
-        function checkAnswer(element, correct, qId) {
-            const answer = document.getElementById(qId + '_answer');
-            answer.classList.add('show');
-        }
-        
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') sendQuestion();
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        window.addEventListener('load', () => {
-            addMessage({
-                found: false,
-                answer_vi: '👋 Xin chào! Tôi là Trợ Lý Dược Học với Quiz Ôn Tập. Hãy hỏi bất kỳ câu hỏi nào!',
-                answer_en: '👋 Hello! I am Pharmaceutical Assistant with Practice Quiz. Ask me anything!',
-                citation: 'System'
-            }, 'bot');
-        });
-    </script>
-</body>
-</html>'''
-
-@app.route('/', methods=['GET'])
-def chatbox():
-    return HTML_CHATBOX
-
-@app.route('/api/chat', methods=['POST'])
-def chat_api():
-    data = request.json
-    question = data.get('question', '').strip()
-    
-    if not question:
-        return jsonify({
-            'found': False,
-            'answer_vi': 'Lỗi: Câu hỏi trống!',
-            'answer_en': 'Error: Empty question!',
-            'citation': 'N/A',
-            'quiz': None
-        }), 400
-    
-    response = ai_agent(question, include_quiz=True)
-    return jsonify(response), 200
-
-@app.route('/query', methods=['GET'])
-def query():
-    question = request.args.get('q', '').strip()
-    
-    if not question:
-        return jsonify({'error': 'Missing question parameter'}), 400
-    
-    response = ai_agent(question, include_quiz=False)
-    
-    return jsonify({
-        'question': question,
-        'answer': response.get('answer_vi', 'No answer'),
-        'found': response.get('found', False),
-        'citation': response.get('citation', 'N/A')
-    }), 200
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({
-        'status': 'ok',
-        'app': 'Huong Pharmacy AI Copilot',
-        'version': '3.0 (Bilingual with Quiz)',
-        'features': ['Chat', 'Citation', 'Quiz Generation']
-    }), 200
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
