@@ -1,19 +1,12 @@
-import os
-
-from groq import Groq
-from pdf_search import search_pdf
-
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
-
 def ai_agent(user_question):
+
     if isinstance(user_question, list):
 
-    try:
-        user_question = user_question[-1]["content"]
-    except:
-        user_question = str(user_question)
+        try:
+            user_question = user_question[-1]["content"]
+
+        except:
+            user_question = str(user_question)
 
     result = search_pdf(user_question)
 
