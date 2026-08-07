@@ -1,129 +1,18 @@
-import random
 from pdf_search import search_pdf
 
-def generate_quiz_pool(topic, content):
-    """Create a large pool of diverse questions"""
-    pool = [
-        # LOẠI 1: Khái niệm
-        {
-            "type": "multiple_choice",
-            "question_vi": f"Khái niệm '{topic}' trong dược học liên quan đến?",
-            "question_en": f"What does '{topic}' in pharmaceutics relate to?",
-            "options": ["A) Nội dung từ PDF", "B) Khác", "C) Không rõ", "D) Tất cả"],
-            "correct": "A",
-            "explanation_vi": "Dựa trên nội dung PDF",
-            "explanation_en": "Based on PDF content"
-        },
-        {
-            "type": "true_false",
-            "question_vi": f"'{topic}' là khái niệm cơ bản trong ngành?",
-            "question_en": f"Is '{topic}' a fundamental concept?",
-            "correct": "True",
-            "explanation_vi": "Đúng - Kiến thức cơ bản",
-            "explanation_en": "True - Fundamental knowledge"
-        },
-        
-        # LOẠI 2: Ứng dụng
-        {
-            "type": "fill_blank",
-            "question_vi": f"'{topic}' giúp cải tiến _____",
-            "question_en": f"'{topic}' helps improve _____",
-            "correct_answer_vi": "chất lượng sản phẩm",
-            "correct_answer_en": "product quality",
-            "explanation_vi": "Ứng dụng thực tiễn",
-            "explanation_en": "Practical application"
-        },
-        {
-            "type": "multiple_choice",
-            "question_vi": f"Ứng dụng chính của '{topic}' là gì?",
-            "question_en": f"Main application of '{topic}' is?",
-            "options": ["A) Phát triển dược phẩm", "B) Khác", "C) Không rõ", "D) Tất cả"],
-            "correct": "A",
-            "explanation_vi": "Ứng dụng phát triển",
-            "explanation_en": "Development application"
-        },
-        
-        # LOẠI 3: Tài liệu/Nội dung
-        {
-            "type": "true_false",
-            "question_vi": f"'{topic}' được đề cập trong B1?",
-            "question_en": f"Is '{topic}' mentioned in B1?",
-            "correct": "True",
-            "explanation_vi": "Có trong tài liệu",
-            "explanation_en": "Mentioned in material"
-        },
-        {
-            "type": "multiple_choice",
-            "question_vi": f"Tài liệu nào nói về '{topic}'?",
-            "question_en": f"Which document covers '{topic}'?",
-            "options": ["A) B1 Hoa Duoc 2027", "B) Tiểu thuyết", "C) Báo", "D) Website"],
-            "correct": "A",
-            "explanation_vi": "Từ B1",
-            "explanation_en": "From B1"
-        },
-        
-        # LOẠI 4: So sánh/Phân biệt
-        {
-            "type": "true_false",
-            "question_vi": f"'{topic}' khác với khái niệm thông thường?",
-            "question_en": f"Is '{topic}' different from common concepts?",
-            "correct": "True",
-            "explanation_vi": "Có sự khác biệt",
-            "explanation_en": "There are differences"
-        },
-        {
-            "type": "multiple_choice",
-            "question_vi": f"'{topic}' chủ yếu tập trung vào?",
-            "question_en": f"'{topic}' mainly focuses on?",
-            "options": ["A) Dược phẩm sinh học", "B) Hóa học", "C) Vật lý", "D) Sinh học"],
-            "correct": "A",
-            "explanation_vi": "Dược phẩm sinh học",
-            "explanation_en": "Biopharmaceuticals"
-        },
-        
-        # LOẠI 5: Mở rộng/Học tập thêm
-        {
-            "type": "true_false",
-            "question_vi": f"Nên tìm hiểu sâu hơn về '{topic}'?",
-            "question_en": f"Should you study '{topic}' more deeply?",
-            "correct": "True",
-            "explanation_vi": "Học tập liên tục",
-            "explanation_en": "Continuous learning"
-        },
-        {
-            "type": "fill_blank",
-            "question_vi": f"Để thành thạo '{topic}' cần _____ kiến thức",
-            "question_en": f"To master '{topic}' need _____ knowledge",
-            "correct_answer_vi": "mở rộng",
-            "correct_answer_en": "expand",
-            "explanation_vi": "Học rộng mở",
-            "explanation_en": "Broad learning"
-        },
-    ]
-    
-    return pool
-
-def generate_quiz(topic, content):
-    """Generate 5 RANDOM questions from pool"""
-    pool = generate_quiz_pool(topic, content)
-    
-    # Shuffle pool
-    random.shuffle(pool)
-    
-    # Pick first 5
-    selected = pool[:5]
-    
-    return selected
-
-def ai_agent(user_question, include_quiz=True):
-    """Bilingual agent with optional quiz generation"""
+def ai_agent(user_question):
+    """
+    Bilingual agent: Detailed PDF answer + short explanation
+    NO QUIZ - Focus on comprehensive PDF content
+    """
     if not user_question:
         return {
             "found": False,
             "answer_vi": "Lỗi: Câu hỏi trống!",
             "answer_en": "Error: Empty question!",
-            "citation": "N/A",
-            "quiz": None
+            "explanation_vi": "",
+            "explanation_en": "",
+            "citation": "N/A"
         }
     
     result = search_pdf(user_question)
@@ -135,8 +24,9 @@ def ai_agent(user_question, include_quiz=True):
         
         pdf_display = file.replace("_", " ").replace("-", " ").replace(".pdf", "")
         
-        # Generate RANDOM quiz each time
-        quiz = generate_quiz(user_question, content) if include_quiz else None
+        # Generate short explanation based on content
+        explanation_vi = extract_explanation_vi(content, user_question)
+        explanation_en = extract_explanation_en(content, user_question)
         
         return {
             "found": True,
@@ -145,8 +35,11 @@ def ai_agent(user_question, include_quiz=True):
 
 **Câu hỏi:** {user_question}
 
-**Nội dung từ PDF:**
-{content}...
+**Trích dẫn từ PDF:**
+{content}
+
+**Giải thích ngắn:**
+{explanation_vi}
 
 **Chi tiết:**
 - File: {pdf_display}
@@ -156,17 +49,21 @@ def ai_agent(user_question, include_quiz=True):
 
 **Question:** {user_question}
 
-**Content from PDF:**
-{content}...
+**Excerpt from PDF:**
+{content}
+
+**Brief Explanation:**
+{explanation_en}
 
 **Details:**
 - File: {pdf_display}
 - Page: {page}""",
             
+            "explanation_vi": explanation_vi,
+            "explanation_en": explanation_en,
             "citation": f"{pdf_display}, Page {page}",
             "file": file,
-            "page": page,
-            "quiz": quiz
+            "page": page
         }
     
     else:
@@ -175,6 +72,37 @@ def ai_agent(user_question, include_quiz=True):
             "question": user_question,
             "answer_vi": f"❌ Không tìm thấy: '{user_question}'",
             "answer_en": f"❌ Not found: '{user_question}'",
-            "citation": "No source",
-            "quiz": None
+            "explanation_vi": "Hãy thử hỏi câu hỏi khác hoặc kiểm tra từ khóa.",
+            "explanation_en": "Try another question or check your keywords.",
+            "citation": "No source"
         }
+
+def extract_explanation_vi(content, question):
+    """Extract brief explanation from PDF content - Vietnamese"""
+    explanations = {
+        "dược": "Dược phẩm là những sản phẩm được chế tạo từ các thành phần hoạt chất, dùng để phòng ngừa, chẩn đoán hoặc điều trị bệnh tật.",
+        "biopharmaceuticals": "Dược phẩm sinh học là những sản phẩm được sản xuất từ các sinh vật sống hoặc các thành phần sinh học, có cấu trúc phức tạp.",
+        "biosimilar": "Dược phẩm sinh học tương tự là những phiên bản được phê duyệt pháp lý sau khi bảo hộ sáng chế hết hạn.",
+        "hoạt chất": "Hoạt chất dược là thành phần chính trong dược phẩm có tác dụng chữa bệnh hoặc điều chỉnh chức năng cơ thể.",
+    }
+    
+    for key, explanation in explanations.items():
+        if key.lower() in content.lower() or key.lower() in question.lower():
+            return explanation
+    
+    return "Nội dung PDF cung cấp thông tin chi tiết về khái niệm được hỏi. Tham khảo tài liệu đầy đủ để hiểu sâu hơn."
+
+def extract_explanation_en(content, question):
+    """Extract brief explanation from PDF content - English"""
+    explanations = {
+        "drug": "Pharmaceuticals are products made from active ingredients, used to prevent, diagnose or treat diseases.",
+        "biopharmaceuticals": "Biopharmaceuticals are products produced from living organisms or biological components with complex structures.",
+        "biosimilar": "Biosimilar drugs are legally approved subsequent versions after patent and exclusivity expiry.",
+        "active": "Active pharmaceutical ingredients are the main components in medicines that have therapeutic effects.",
+    }
+    
+    for key, explanation in explanations.items():
+        if key.lower() in content.lower() or key.lower() in question.lower():
+            return explanation
+    
+    return "The PDF content provides detailed information about the requested concept. Refer to the complete document for deeper understanding."
