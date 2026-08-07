@@ -8,6 +8,12 @@ client = Groq(
 )
 
 def ai_agent(user_question):
+    if isinstance(user_question, list):
+
+    try:
+        user_question = user_question[-1]["content"]
+    except:
+        user_question = str(user_question)
 
     result = search_pdf(user_question)
 
