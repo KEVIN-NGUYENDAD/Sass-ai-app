@@ -320,7 +320,7 @@ Uploaded Document:
             }
         ]
 
-        response = ai_agent(messages)
+        response = ai_agent(prompt)
 
     return render_template_string(
         HTML,
