@@ -14,9 +14,10 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session, redirect
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 logger = logging.getLogger("nail_salon_checkin")
 
 # Configured with CHAIRS_PER_SLOT = 1 and SMS confirmation flow
@@ -33,6 +34,7 @@ DURATION_OPTIONS = (30, 60)  # minutes the owner can confirm a service will take
 
 OWNER_PHONE = os.environ.get("OWNER_PHONE", "+16237604999")
 BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checkin.onrender.com
+STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD", "250618")
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -173,8 +175,25 @@ def checkin_page():
     )
 
 
+@app.route("/staff-login")
+def staff_login_page():
+    return render_template("staff_login.html")
+
+
+@app.route("/api/staff-login", methods=["POST"])
+def api_staff_login():
+    data = request.get_json(silent=True) or {}
+    password = data.get("password", "").strip()
+    if password == STAFF_PASSWORD:
+        session["staff_authenticated"] = True
+        return jsonify({"success": True}), 200
+    return jsonify({"error": "Incorrect password"}), 401
+
+
 @app.route("/staff")
 def staff_page():
+    if not session.get("staff_authenticated"):
+        return redirect("/staff-login")
     return render_template("staff.html")
 
 
