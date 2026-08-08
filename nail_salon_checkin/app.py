@@ -48,7 +48,7 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "checkins.json")
 
-STATUSES = ("waiting", "in_service", "done", "cancelled")
+STATUSES = ("waiting", "confirmed", "in_service", "done", "cancelled")
 
 _lock = threading.Lock()
 
@@ -314,6 +314,36 @@ def api_update_status(checkin_id):
                 return jsonify({"checkin": c})
 
     return jsonify({"error": "Check-in not found"}), 404
+
+
+@app.route("/api/checkins/<checkin_id>/confirm-duration", methods=["POST"])
+def api_confirm_duration(checkin_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        duration = int(data.get("duration_minutes"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid duration"}), 400
+    if duration not in DURATION_OPTIONS:
+        return jsonify({"error": "Invalid duration"}), 400
+
+    with _lock:
+        checkins = _load()
+        checkin = next((c for c in checkins if c["id"] == checkin_id), None)
+        if not checkin:
+            return jsonify({"error": "Check-in not found"}), 404
+
+        checkin["duration_minutes"] = duration
+        checkin["confirmed"] = True
+        checkin["status"] = "confirmed"
+        _save(checkins)
+
+    send_sms(
+        checkin.get("phone"),
+        f"Hi {checkin['name']}! Your nail salon appointment is confirmed for "
+        f"{checkin['date']} at {format_time_12h(checkin['time'])} ({duration} min). See you soon!",
+    )
+
+    return jsonify({"checkin": checkin})
 
 
 # --- Owner confirmation (reached via the link texted to the owner) --------
