@@ -144,6 +144,7 @@
 
         const name = document.getElementById('name').value.trim();
         const phone = document.getElementById('phone').value.trim();
+        const nickname = document.getElementById('nickname').value.trim();
         const date = dateInput.value;
         const time = selectedTimeInput.value;
         const note = serviceNote.value.trim();
@@ -159,7 +160,7 @@
             const res = await fetch('/api/checkin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, phone, date, time, service_note: note }),
+                body: JSON.stringify({ name, phone, nickname, date, time, service_note: note }),
             });
             const data = await res.json();
             if (!res.ok) {

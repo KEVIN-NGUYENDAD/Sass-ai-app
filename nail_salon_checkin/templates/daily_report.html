@@ -198,6 +198,11 @@
                     </div>
                 </div>
 
+                <div style="display: flex; gap: 8px; margin-top: 20px;">
+                    <button class="btn-secondary" id="downloadDailyBtn">📥 Download CSV</button>
+                    <button class="btn-primary" id="sendDailyBtn">📱 Send via SMS</button>
+                </div>
+
                 <button class="btn-primary" id="saveBtn" style="width: 100%;">Save Daily Report</button>
                 <p id="reportMessage" class="error" hidden style="margin-top: 12px;"></p>
             </div>
@@ -239,6 +244,11 @@
                         <div class="value" style="color: #10b981;">$<span id="weekGrandTotal">0.00</span></div>
                     </div>
                 </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 20px;">
+                    <button class="btn-secondary" id="downloadWeeklyBtn">📥 Download CSV</button>
+                    <button class="btn-primary" id="sendWeeklyBtn">📱 Send via SMS</button>
+                </div>
             </div>
 
             <!-- MONTHLY TAB -->
@@ -277,6 +287,11 @@
                         <div class="label">Month Grand Total</div>
                         <div class="value" style="color: #10b981;">$<span id="monthGrandTotal">0.00</span></div>
                     </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 20px;">
+                    <button class="btn-secondary" id="downloadMonthlyBtn">📥 Download CSV</button>
+                    <button class="btn-primary" id="sendMonthlyBtn">📱 Send via SMS</button>
                 </div>
             </div>
 
@@ -479,6 +494,40 @@
                 msg.hidden = false;
                 setTimeout(() => msg.hidden = true, 3000);
             });
+
+            function downloadReport(type) {
+                const today = todayStr();
+                let url = '';
+                if (type === 'day') {
+                    url = `/api/export/daily-summary?date=${today}`;
+                } else if (type === 'week') {
+                    url = '/api/export/weekly-summary';
+                } else if (type === 'month') {
+                    url = '/api/export/monthly-summary';
+                }
+                if (url) window.location.href = url;
+            }
+
+            function sendReportSMS(type) {
+                const today = todayStr();
+                const payload = type === 'day' ? { type: 'day', date: today } : { type };
+                fetch('/api/send-summary-sms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }).then(res => {
+                    if (res.ok) {
+                        alert(`📱 ${type.charAt(0).toUpperCase() + type.slice(1)} report sent via SMS!`);
+                    }
+                });
+            }
+
+            document.getElementById('downloadDailyBtn').addEventListener('click', () => downloadReport('day'));
+            document.getElementById('sendDailyBtn').addEventListener('click', () => sendReportSMS('day'));
+            document.getElementById('downloadWeeklyBtn').addEventListener('click', () => downloadReport('week'));
+            document.getElementById('sendWeeklyBtn').addEventListener('click', () => sendReportSMS('week'));
+            document.getElementById('downloadMonthlyBtn').addEventListener('click', () => downloadReport('month'));
+            document.getElementById('sendMonthlyBtn').addEventListener('click', () => sendReportSMS('month'));
 
             loadDailyReport();
             loadWeeklyReport();
