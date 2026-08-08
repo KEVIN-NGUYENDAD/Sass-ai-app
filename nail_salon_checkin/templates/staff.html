@@ -75,6 +75,7 @@
                         <select id="addDuration" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit;">
                             <option value="">Select duration</option>
                             <option value="30">30 minutes</option>
+                            <option value="45">45 minutes</option>
                             <option value="60">60 minutes</option>
                         </select>
                     </div>
@@ -119,9 +120,10 @@
             <h2 style="margin-bottom: 16px;">Confirm Service Duration</h2>
             <p id="confirmModalName" style="font-weight: 600; margin-bottom: 8px;"></p>
             <p id="confirmModalTime" style="color: var(--muted); font-size: 14px; margin-bottom: 16px;"></p>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-secondary" id="confirm30Btn" style="width: 100%;">30 minutes</button>
-                <button class="btn-secondary" id="confirm60Btn" style="width: 100%;">60 minutes</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-secondary" id="confirm30Btn" style="flex: 1; min-width: 80px;">30 min</button>
+                <button class="btn-secondary" id="confirm45Btn" style="flex: 1; min-width: 80px;">45 min</button>
+                <button class="btn-secondary" id="confirm60Btn" style="flex: 1; min-width: 80px;">60 min</button>
             </div>
             <button class="btn-secondary" id="confirmCancelBtn" style="width: 100%; margin-top: 8px; background: #f3f4f6;">Cancel</button>
         </div>

@@ -282,9 +282,10 @@ textarea { resize: vertical; }
     font-weight: 700;
 }
 
-.status-waiting { background: #fff3cd; color: #8a6d1f; }
+.status-waiting_confirm { background: #fff3cd; color: #8a6d1f; }
+.status-confirmed { background: #dbeafe; color: #1e40af; }
 .status-in_service { background: #e0e9fb; color: #2d4f9e; }
-.status-done { background: #e9f7ef; color: #2e9e5b; }
+.status-complete { background: #e9f7ef; color: #2e9e5b; }
 .status-cancelled { background: #fdecea; color: #b3261e; }
 
 .status-select {
