@@ -345,6 +345,62 @@ def api_owner_confirm(checkin_id):
     return jsonify({"checkin": checkin})
 
 
+@app.route("/api/checkin-by-staff", methods=["POST"])
+def api_checkin_by_staff():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    date_str = (data.get("date") or "").strip()
+    time_str = (data.get("time") or "").strip()
+    service_note = (data.get("service_note") or "").strip()
+    duration_minutes = data.get("duration_minutes")
+
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if not valid_date(date_str):
+        return jsonify({"error": "Invalid or out-of-range date"}), 400
+    if time_str not in SLOTS:
+        return jsonify({"error": "Invalid time slot"}), 400
+    if not service_note:
+        return jsonify({"error": "Service note is required"}), 400
+    try:
+        duration_minutes = int(duration_minutes)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid duration"}), 400
+    if duration_minutes not in DURATION_OPTIONS:
+        return jsonify({"error": "Duration must be 30 or 60 minutes"}), 400
+
+    with _lock:
+        checkins = _load()
+        booked = slot_occupancy(checkins, date_str).get(time_str, 0)
+        if booked >= CHAIRS_PER_SLOT:
+            return jsonify({"error": "That time slot is full"}), 409
+
+        record = {
+            "id": uuid.uuid4().hex[:8],
+            "name": name,
+            "phone": phone,
+            "date": date_str,
+            "time": time_str,
+            "service_note": service_note,
+            "status": "waiting",
+            "duration_minutes": duration_minutes,
+            "confirmed": True,
+            "confirm_token": uuid.uuid4().hex,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        checkins.append(record)
+        _save(checkins)
+
+    send_sms(
+        phone,
+        f"Hi {name}! Your nail salon appointment is confirmed for "
+        f"{date_str} at {format_time_12h(time_str)} ({duration_minutes} min). See you soon!",
+    )
+
+    return jsonify({"checkin": record}), 201
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "app": "Nail Salon Check-In"}), 200
