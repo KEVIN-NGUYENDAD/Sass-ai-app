@@ -10,8 +10,15 @@
     const addServiceInput = document.getElementById('addService');
     const addCheckinBtn = document.getElementById('addCheckinBtn');
     const addErrorEl = document.getElementById('addError');
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmModalName = document.getElementById('confirmModalName');
+    const confirmModalTime = document.getElementById('confirmModalTime');
+    const confirm30Btn = document.getElementById('confirm30Btn');
+    const confirm60Btn = document.getElementById('confirm60Btn');
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 
     let timeSlots = [];
+    let pendingConfirmCheckinId = null;
 
     function todayStr() {
         const d = new Date();
@@ -28,6 +35,7 @@
 
     const STATUS_LABELS = {
         waiting: 'Waiting',
+        confirmed: 'Confirmed',
         in_service: 'In Service',
         done: 'Done',
         cancelled: 'Cancelled',
@@ -78,17 +86,26 @@
                 <td></td>
             `;
             const actionCell = tr.lastElementChild;
-            const select = document.createElement('select');
-            select.className = 'status-select';
-            Object.entries(STATUS_LABELS).forEach(([value, label]) => {
-                const opt = document.createElement('option');
-                opt.value = value;
-                opt.textContent = label;
-                if (value === c.status) opt.selected = true;
-                select.appendChild(opt);
-            });
-            select.addEventListener('change', () => updateStatus(c.id, select.value));
-            actionCell.appendChild(select);
+            if (c.status === 'waiting') {
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn-secondary';
+                confirmBtn.style.cssText = 'width: 100%; padding: 6px 8px; font-size: 12px;';
+                confirmBtn.textContent = 'Confirm';
+                confirmBtn.addEventListener('click', () => showConfirmModal(c));
+                actionCell.appendChild(confirmBtn);
+            } else {
+                const select = document.createElement('select');
+                select.className = 'status-select';
+                Object.entries(STATUS_LABELS).forEach(([value, label]) => {
+                    const opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = label;
+                    if (value === c.status) opt.selected = true;
+                    select.appendChild(opt);
+                });
+                select.addEventListener('change', () => updateStatus(c.id, select.value));
+                actionCell.appendChild(select);
+            }
             queueBody.appendChild(tr);
         });
     }
@@ -170,7 +187,7 @@
             addTimeSelect.value = '';
             addDurationSelect.value = '';
             document.getElementById('addCheckinForm').style.display = 'none';
-            loadQueue();
+            loadQueueWithTimeline();
             loadTimeSlots(date);
         } catch (e) {
             addErrorEl.textContent = 'Connection error';
@@ -185,12 +202,117 @@
         return div.innerHTML;
     }
 
+    function renderTimeline(checkins) {
+        const timeline = document.getElementById('timeline');
+        timeline.innerHTML = '';
+
+        if (!checkins.length) {
+            timeline.innerHTML = '<p class="muted" style="padding: 8px;">No check-ins today</p>';
+            return;
+        }
+
+        checkins.forEach(c => {
+            const [h, m] = c.time.split(':').map(Number);
+            const span = c.duration_minutes ? Math.ceil(c.duration_minutes / 30) : 1;
+            const statusColor = {
+                waiting: '#fbbf24',
+                confirmed: '#60a5fa',
+                in_service: '#34d399',
+                done: '#a78bfa',
+                cancelled: '#ef5350'
+            }[c.status] || '#9ca3af';
+
+            const block = document.createElement('div');
+            block.style.cssText = `
+                flex: 0 0 ${span * 90}px;
+                min-height: 60px;
+                background: ${statusColor};
+                border-radius: 8px;
+                padding: 8px;
+                color: white;
+                font-size: 12px;
+                font-weight: 600;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                cursor: pointer;
+                opacity: 0.9;
+            `;
+            block.innerHTML = `
+                <div>${formatTime(c.time)}</div>
+                <div style="font-weight: 700; margin: 2px 0;">${escapeHtml(c.name)}</div>
+                <div style="font-size: 11px; opacity: 0.9;">${c.duration_minutes || '?'} min</div>
+            `;
+
+            if (c.status === 'waiting') {
+                block.addEventListener('click', () => showConfirmModal(c));
+            }
+
+            timeline.appendChild(block);
+        });
+    }
+
+    function showConfirmModal(checkin) {
+        pendingConfirmCheckinId = checkin.id;
+        confirmModalName.textContent = checkin.name;
+        confirmModalTime.textContent = `${checkin.date} at ${formatTime(checkin.time)}`;
+        confirmModal.style.display = 'flex';
+    }
+
+    function hideConfirmModal() {
+        confirmModal.style.display = 'none';
+        pendingConfirmCheckinId = null;
+    }
+
+    async function confirmDuration(duration) {
+        if (!pendingConfirmCheckinId) return;
+
+        try {
+            const res = await fetch(`/api/checkins/${pendingConfirmCheckinId}/confirm-duration`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ duration_minutes: duration }),
+            });
+            if (res.ok) {
+                hideConfirmModal();
+                loadQueue();
+            }
+        } catch (e) {
+            console.error('Confirm failed:', e);
+        }
+    }
+
+    confirm30Btn.addEventListener('click', () => confirmDuration(30));
+    confirm60Btn.addEventListener('click', () => confirmDuration(60));
+    confirmCancelBtn.addEventListener('click', hideConfirmModal);
+    confirmModal.addEventListener('click', (e) => {
+        if (e.target === confirmModal) hideConfirmModal();
+    });
+
+    function loadQueueWithTimeline(options) {
+        const isFirstLoad = !(options && options.silent);
+        if (isFirstLoad) {
+            queueBody.innerHTML = '<tr><td colspan="7" class="muted">Loading&hellip;</td></tr>';
+        }
+        try {
+            fetch(`/api/checkins?date=${encodeURIComponent(dateInput.value)}`)
+                .then(res => res.json())
+                .then(data => {
+                    renderQueue(data.checkins || []);
+                    renderTimeline(data.checkins || []);
+                    updateStats(data.checkins || []);
+                });
+        } catch (e) {
+            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="7" class="muted">Connection error.</td></tr>';
+        }
+    }
+
     dateInput.value = todayStr();
     addDateInput.value = todayStr();
-    dateInput.addEventListener('change', loadQueue);
-    refreshBtn.addEventListener('click', loadQueue);
+    dateInput.addEventListener('change', loadQueueWithTimeline);
+    refreshBtn.addEventListener('click', loadQueueWithTimeline);
 
-    loadQueue();
+    loadQueueWithTimeline();
     loadTimeSlots(todayStr());
-    setInterval(() => loadQueue({ silent: true }), 10000);
+    setInterval(() => loadQueueWithTimeline({ silent: true }), 10000);
 })();

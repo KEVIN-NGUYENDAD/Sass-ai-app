@@ -31,6 +31,15 @@
             </div>
         </div>
 
+        <div class="card wide" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📅 Today's Timeline</h3>
+            <div id="timelineContainer" style="overflow-x: auto; padding: 12px 0;">
+                <div id="timeline" style="display: flex; gap: 8px; min-width: min-content;">
+                    <!-- Timeline blocks will be rendered here -->
+                </div>
+            </div>
+        </div>
+
         <div class="card wide" id="addCheckinCard" style="margin-bottom: 20px;">
             <p style="cursor: pointer; font-weight: 600; color: var(--pink-dark); user-select: none;" onclick="document.getElementById('addCheckinForm').style.display = document.getElementById('addCheckinForm').style.display === 'none' ? 'block' : 'none';">➕ Add Check-In</p>
             <div id="addCheckinForm" style="display: none; margin-top: 16px;">
@@ -103,6 +112,19 @@
         <footer class="footer">
             <a href="/">&larr; Back to check-in</a>
         </footer>
+    </div>
+
+    <div id="confirmModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+        <div class="card" style="max-width: 360px; margin: auto;">
+            <h2 style="margin-bottom: 16px;">Confirm Service Duration</h2>
+            <p id="confirmModalName" style="font-weight: 600; margin-bottom: 8px;"></p>
+            <p id="confirmModalTime" style="color: var(--muted); font-size: 14px; margin-bottom: 16px;"></p>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary" id="confirm30Btn" style="width: 100%;">30 minutes</button>
+                <button class="btn-secondary" id="confirm60Btn" style="width: 100%;">60 minutes</button>
+            </div>
+            <button class="btn-secondary" id="confirmCancelBtn" style="width: 100%; margin-top: 8px; background: #f3f4f6;">Cancel</button>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='staff.js') }}"></script>
