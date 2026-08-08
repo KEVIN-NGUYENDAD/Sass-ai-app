@@ -34,12 +34,29 @@ extra time is blocked off in the slot grid.
 
 Texts are sent via [Twilio](https://www.twilio.com/). Set these environment
 variables (e.g. in Render's dashboard under the service's Environment tab)
-to enable real sending:
+to enable real sending. Two ways to authenticate — use whichever pair of
+credentials you have:
+
+**Option A — Auth Token** (from the main Twilio Console dashboard):
 
 | Variable              | Description                                           |
 | ---------------------- | ------------------------------------------------------ |
-| `TWILIO_ACCOUNT_SID`   | From your Twilio console                                |
-| `TWILIO_AUTH_TOKEN`    | From your Twilio console                                |
+| `TWILIO_ACCOUNT_SID`   | Starts with `AC...`, from your Twilio console                |
+| `TWILIO_AUTH_TOKEN`    | From your Twilio console, next to the Account SID            |
+
+**Option B — API Key** (Account > API keys & tokens in the console; more
+scoped/revocable, recommended for production):
+
+| Variable                 | Description                                           |
+| ------------------------- | ------------------------------------------------------ |
+| `TWILIO_ACCOUNT_SID`      | Starts with `AC...` &mdash; still required, from the main console dashboard |
+| `TWILIO_API_KEY_SID`      | Starts with `SK...`, shown when you create the API key       |
+| `TWILIO_API_KEY_SECRET`   | The "Client secret" shown once when you create the API key   |
+
+Either way, also set:
+
+| Variable              | Description                                           |
+| ---------------------- | ------------------------------------------------------ |
 | `TWILIO_FROM_NUMBER`   | The Twilio phone number to send from (E.164, e.g. `+1...`) |
 | `OWNER_PHONE`          | Where owner notifications are sent. Defaults to `+16237604999` |
 | `BASE_URL`             | Public base URL used to build the confirm link, e.g. `https://nail-salon-checkin.onrender.com`. Falls back to the incoming request's host if unset |

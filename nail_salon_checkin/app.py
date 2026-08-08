@@ -34,6 +34,11 @@ BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checki
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+# Alternative to TWILIO_AUTH_TOKEN: a scoped API Key (SID starts with "SK"),
+# created under Account > API keys & tokens in the Twilio console. Still
+# requires TWILIO_ACCOUNT_SID to be set alongside it.
+TWILIO_API_KEY_SID = os.environ.get("TWILIO_API_KEY_SID")
+TWILIO_API_KEY_SECRET = os.environ.get("TWILIO_API_KEY_SECRET")
 TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -45,6 +50,20 @@ _lock = threading.Lock()
 
 
 # --- SMS -------------------------------------------------------------------
+def _twilio_credentials_configured():
+    has_api_key_auth = TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET and TWILIO_ACCOUNT_SID
+    has_auth_token = TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN
+    return bool(TWILIO_FROM_NUMBER and (has_api_key_auth or has_auth_token))
+
+
+def _twilio_client():
+    from twilio.rest import Client
+
+    if TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET and TWILIO_ACCOUNT_SID:
+        return Client(TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_ACCOUNT_SID)
+    return Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+
 def send_sms(to_number, body):
     """Send a text via Twilio if configured; otherwise just log it.
 
@@ -53,13 +72,11 @@ def send_sms(to_number, body):
     """
     if not to_number:
         return
-    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER):
+    if not _twilio_credentials_configured():
         logger.info("[SMS not sent - Twilio not configured] to=%s body=%s", to_number, body)
         return
     try:
-        from twilio.rest import Client
-
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        client = _twilio_client()
         client.messages.create(to=to_number, from_=TWILIO_FROM_NUMBER, body=body)
     except Exception:
         logger.exception("Failed to send SMS to %s", to_number)
