@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Login &ndash; Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page" style="max-width: 360px;">
+        <header class="hero" style="padding: 40px 0 30px;">
+            <h1>🔐 Staff Access</h1>
+            <p>Enter password to view the queue.</p>
+        </header>
+
+        <main class="card">
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter password" autofocus>
+            </div>
+            <p id="loginError" class="error" hidden></p>
+            <button class="btn-primary" id="loginBtn">Sign In</button>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const passwordInput = document.getElementById('password');
+            const loginBtn = document.getElementById('loginBtn');
+            const errorEl = document.getElementById('loginError');
+
+            async function doLogin() {
+                loginBtn.disabled = true;
+                errorEl.hidden = true;
+                try {
+                    const res = await fetch('/api/staff-login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: passwordInput.value }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        window.location.href = '/staff';
+                        return;
+                    }
+                    errorEl.textContent = data.error || 'Login failed';
+                    errorEl.hidden = false;
+                    loginBtn.disabled = false;
+                } catch (e) {
+                    errorEl.textContent = 'Connection error';
+                    errorEl.hidden = false;
+                    loginBtn.disabled = false;
+                }
+            }
+
+            loginBtn.addEventListener('click', doLogin);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') doLogin();
+            });
+        })();
+    </script>
+</body>
+</html>

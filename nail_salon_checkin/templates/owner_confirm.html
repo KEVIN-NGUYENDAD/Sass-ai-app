@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Service Time &ndash; Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero hero-compact">
+            <h1>&#128133; Confirm Service Time</h1>
+            <p>Pick how long this service will take.</p>
+        </header>
+
+        <main class="card">
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% elif checkin.confirmed %}
+                <div class="confirm">
+                    <div class="confirm-icon">&#10003;</div>
+                    <h2>Already confirmed</h2>
+                    <p>This check-in was already set to {{ checkin.duration_minutes }} minutes.</p>
+                </div>
+            {% else %}
+                <dl class="confirm-details">
+                    <dt>Name</dt><dd>{{ checkin.name }}</dd>
+                    <dt>Phone</dt><dd>{{ checkin.phone or 'N/A' }}</dd>
+                    <dt>Time</dt><dd>{{ checkin.date }} at {{ time_12h }}</dd>
+                    <dt>Service note</dt><dd>{{ checkin.service_note }}</dd>
+                </dl>
+
+                <p class="hint">How long will this service take?</p>
+                <div class="chip-row" id="durationButtons">
+                    {% for minutes in duration_options %}
+                    <button type="button" class="btn-secondary duration-btn" data-minutes="{{ minutes }}">{{ minutes }} minutes</button>
+                    {% endfor %}
+                </div>
+
+                <p id="ownerConfirmError" class="error" hidden></p>
+                <div id="ownerConfirmDone" class="confirm" hidden>
+                    <div class="confirm-icon">&#10003;</div>
+                    <h2>Confirmed!</h2>
+                    <p>The customer has been texted a confirmation.</p>
+                </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const buttons = document.querySelectorAll('.duration-btn');
+            if (!buttons.length) return;
+            const errorEl = document.getElementById('ownerConfirmError');
+            const doneEl = document.getElementById('ownerConfirmDone');
+            const checkinId = {{ checkin.id | tojson if checkin else 'null' }};
+            const token = {{ token | tojson if token else 'null' }};
+
+            buttons.forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    buttons.forEach((b) => (b.disabled = true));
+                    errorEl.hidden = true;
+                    try {
+                        const res = await fetch(`/api/owner/confirm/${checkinId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token, duration_minutes: Number(btn.dataset.minutes) }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            errorEl.textContent = data.error || 'Something went wrong.';
+                            errorEl.hidden = false;
+                            buttons.forEach((b) => (b.disabled = false));
+                            return;
+                        }
+                        document.getElementById('durationButtons').style.display = 'none';
+                        doneEl.hidden = false;
+                    } catch (e) {
+                        errorEl.textContent = 'Connection error. Please try again.';
+                        errorEl.hidden = false;
+                        buttons.forEach((b) => (b.disabled = false));
+                    }
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

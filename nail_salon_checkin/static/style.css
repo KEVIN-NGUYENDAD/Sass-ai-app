@@ -1,18 +1,18 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --pink: #e88fb0;
-    --pink-dark: #d46a94;
+    --pink: #5b9dd9;
+    --pink-dark: #2c5aa0;
     --gold: #d4af7a;
-    --bg: #fdf6f8;
-    --ink: #3a2c33;
-    --muted: #8a7a80;
-    --border: #eee1e5;
+    --bg: #e8f0f8;
+    --ink: #1a2e42;
+    --muted: #5a6b7a;
+    --border: #c5d9e8;
 }
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(160deg, #fdf6f8 0%, #f7e9ee 100%);
+    background: linear-gradient(160deg, #e8f0f8 0%, #d4e4f0 100%);
     color: var(--ink);
     min-height: 100vh;
 }

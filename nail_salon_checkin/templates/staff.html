@@ -13,6 +13,68 @@
             <p>Live list of customer check-ins.</p>
         </header>
 
+        <div class="card wide" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center; margin-bottom: 20px;">
+            <div>
+                <div style="font-size: 28px; font-weight: bold; color: #f59e0b;">--</div>
+                <div style="font-size: 12px; color: var(--muted); text-transform: uppercase;">Waiting</div>
+                <div style="font-size: 14px; color: var(--ink); margin-top: 4px;" id="statWaiting">0</div>
+            </div>
+            <div>
+                <div style="font-size: 28px; font-weight: bold; color: #3b82f6;">--</div>
+                <div style="font-size: 12px; color: var(--muted); text-transform: uppercase;">In Service</div>
+                <div style="font-size: 14px; color: var(--ink); margin-top: 4px;" id="statInService">0</div>
+            </div>
+            <div>
+                <div style="font-size: 28px; font-weight: bold; color: #10b981;">--</div>
+                <div style="font-size: 12px; color: var(--muted); text-transform: uppercase;">Done</div>
+                <div style="font-size: 14px; color: var(--ink); margin-top: 4px;" id="statDone">0</div>
+            </div>
+        </div>
+
+        <div class="card wide" id="addCheckinCard" style="margin-bottom: 20px;">
+            <p style="cursor: pointer; font-weight: 600; color: var(--pink-dark); user-select: none;" onclick="document.getElementById('addCheckinForm').style.display = document.getElementById('addCheckinForm').style.display === 'none' ? 'block' : 'none';">➕ Add Check-In</p>
+            <div id="addCheckinForm" style="display: none; margin-top: 16px;">
+                <div class="field-row">
+                    <div class="field">
+                        <label>Name *</label>
+                        <input type="text" id="addName" placeholder="Customer name">
+                    </div>
+                    <div class="field">
+                        <label>Phone</label>
+                        <input type="tel" id="addPhone" placeholder="(555) 123-4567">
+                    </div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>Date *</label>
+                        <input type="date" id="addDate">
+                    </div>
+                    <div class="field">
+                        <label>Time *</label>
+                        <select id="addTime" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit;">
+                            <option value="">Select time</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Service Note *</label>
+                    <textarea id="addService" placeholder="e.g., Gel manicure with French tip" rows="2"></textarea>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>Duration *</label>
+                        <select id="addDuration" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit;">
+                            <option value="">Select duration</option>
+                            <option value="30">30 minutes</option>
+                            <option value="60">60 minutes</option>
+                        </select>
+                    </div>
+                </div>
+                <p id="addError" class="error" hidden></p>
+                <button class="btn-primary" id="addCheckinBtn">Add Check-In</button>
+            </div>
+        </div>
+
         <main class="card wide">
             <div class="staff-toolbar">
                 <label for="staffDate">Date</label>
@@ -27,12 +89,13 @@
                         <th>Name</th>
                         <th>Phone</th>
                         <th>Service note</th>
+                        <th>Duration</th>
                         <th>Status</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody id="queueBody">
-                    <tr><td colspan="6" class="muted">Loading&hellip;</td></tr>
+                    <tr><td colspan="7" class="muted">Loading&hellip;</td></tr>
                 </tbody>
             </table>
         </main>
