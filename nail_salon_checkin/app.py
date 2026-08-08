@@ -19,6 +19,8 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 logger = logging.getLogger("nail_salon_checkin")
 
+# Configured with CHAIRS_PER_SLOT = 1 and SMS confirmation flow
+
 # --- Configuration -----------------------------------------------------
 OPEN_HOUR = 9          # salon opens at 9:30 AM
 OPEN_MINUTE = 30
