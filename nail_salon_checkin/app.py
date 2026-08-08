@@ -584,6 +584,30 @@ def send_checkin_link():
     return jsonify({"message": "SMS sent successfully!"})
 
 
+@app.route("/api/send-bulk-sms", methods=["POST"])
+def send_bulk_sms():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    req = request.get_json()
+    phones = req.get("phones", [])
+
+    if not phones:
+        return jsonify({"error": "No phones provided"}), 400
+
+    checkin_link = get_base_url() + "/"
+    message = f"Hi! It's been a while - time for your next appointment! Book here: {checkin_link}"
+
+    sent_count = 0
+    for phone in phones:
+        if phone:
+            send_sms(phone, message)
+            sent_count += 1
+
+    logger.info("Sent bulk SMS to %d customers", sent_count)
+    return jsonify({"message": f"SMS sent to {sent_count} customers", "count": sent_count})
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "app": "Nail Salon Check-In"}), 200
