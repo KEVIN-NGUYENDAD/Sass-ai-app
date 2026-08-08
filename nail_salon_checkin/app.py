@@ -450,6 +450,67 @@ def api_checkin_by_staff():
     return jsonify({"checkin": record}), 201
 
 
+@app.route("/daily-report")
+def daily_report_page():
+    if not session.get("staff_authenticated"):
+        return redirect("/staff-login")
+    return render_template("daily_report.html")
+
+
+@app.route("/api/daily-report", methods=["GET"])
+def get_daily_report():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    date = request.args.get("date", "")
+    if not date:
+        return jsonify({"money_received": 0, "tips": 0})
+
+    try:
+        with _lock:
+            data = _load_data()
+    except FileNotFoundError:
+        return jsonify({"money_received": 0, "tips": 0})
+
+    reports = data.get("reports", {})
+    report = reports.get(date, {})
+    return jsonify({
+        "money_received": report.get("money_received", 0),
+        "tips": report.get("tips", 0)
+    })
+
+
+@app.route("/api/daily-report", methods=["POST"])
+def save_daily_report():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    req = request.get_json()
+    date = req.get("date", "")
+    money = float(req.get("money_received", 0))
+    tips = float(req.get("tips", 0))
+
+    if not date:
+        return jsonify({"error": "Missing date"}), 400
+
+    try:
+        with _lock:
+            data = _load_data()
+            if "reports" not in data:
+                data["reports"] = {}
+            data["reports"][date] = {
+                "money_received": money,
+                "tips": tips,
+                "updated_at": datetime.now().isoformat()
+            }
+            _save_data(data)
+    except Exception as e:
+        logger.exception("Error saving report")
+        return jsonify({"error": "Failed to save report"}), 500
+
+    return jsonify({"message": "Report saved successfully"})
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "app": "Nail Salon Check-In"}), 200

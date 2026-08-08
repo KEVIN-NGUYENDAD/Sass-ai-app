@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Report &ndash; Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero hero-compact">
+            <h1>💰 Daily Report</h1>
+            <p id="reportDate" style="color: var(--muted);">Today</p>
+        </header>
+
+        <div class="card wide" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📊 Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px;">
+                <div>
+                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Total Check-Ins</div>
+                    <div style="font-size: 24px; font-weight: bold; color: var(--pink-dark);" id="totalCheckins">0</div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Completed</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #10b981;" id="completedCount">0</div>
+                </div>
+            </div>
+
+            <div style="border-top: 2px solid var(--border); padding-top: 16px;">
+                <div class="field-row" style="margin-bottom: 16px;">
+                    <div class="field">
+                        <label>Money Received ($)</label>
+                        <input type="number" id="moneyInput" placeholder="0.00" min="0" step="0.01" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px;">
+                    </div>
+                    <div class="field">
+                        <label>Tips ($)</label>
+                        <input type="number" id="tipsInput" placeholder="0.00" min="0" step="0.01" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px;">
+                    </div>
+                </div>
+                <button class="btn-primary" id="saveReportBtn" style="width: 100%;">Save Report</button>
+                <p id="reportMessage" class="error" hidden style="margin-top: 12px;"></p>
+            </div>
+        </div>
+
+        <div class="card wide" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">💵 Totals</h3>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center;">
+                <div>
+                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Money</div>
+                    <div style="font-size: 28px; font-weight: bold; color: var(--pink-dark);">$<span id="displayMoney">0.00</span></div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Tips</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #f59e0b;">$<span id="displayTips">0.00</span></div>
+                </div>
+                <div style="background: #fdf6f8; border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Total</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #2e9e5b;">$<span id="displayTotal">0.00</span></div>
+                </div>
+            </div>
+        </div>
+
+        <main class="card wide" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📋 Today's Check-Ins</h3>
+            <div style="overflow-x: auto;">
+                <table class="queue-table" style="min-width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Service</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="checkinBody">
+                        <tr><td colspan="6" class="muted">Loading check-ins...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <a href="/staff">&larr; Back to staff view</a>
+        </footer>
+    </div>
+
+    <script>
+        (function() {
+            const reportDateEl = document.getElementById('reportDate');
+            const totalCheckinsEl = document.getElementById('totalCheckins');
+            const completedCountEl = document.getElementById('completedCount');
+            const moneyInput = document.getElementById('moneyInput');
+            const tipsInput = document.getElementById('tipsInput');
+            const saveReportBtn = document.getElementById('saveReportBtn');
+            const reportMessage = document.getElementById('reportMessage');
+            const checkinBody = document.getElementById('checkinBody');
+            const displayMoney = document.getElementById('displayMoney');
+            const displayTips = document.getElementById('displayTips');
+            const displayTotal = document.getElementById('displayTotal');
+
+            function todayStr() {
+                const d = new Date();
+                const offset = d.getTimezoneOffset();
+                return new Date(d.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+            }
+
+            function formatTime(t) {
+                const [h, m] = t.split(':').map(Number);
+                const period = h >= 12 ? 'PM' : 'AM';
+                const hour12 = h % 12 === 0 ? 12 : h % 12;
+                return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+            }
+
+            function formatDate(dateStr) {
+                const d = new Date(dateStr + 'T00:00:00');
+                return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            }
+
+            const STATUS_LABELS = {
+                waiting_confirm: 'Waiting Confirm',
+                confirmed: 'Confirmed',
+                in_service: 'In Service',
+                complete: 'Complete',
+                cancelled: 'Cancelled',
+            };
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function loadReport() {
+                const today = todayStr();
+                reportDateEl.textContent = formatDate(today);
+
+                fetch(`/api/checkins?date=${encodeURIComponent(today)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const checkins = data.checkins || [];
+                        totalCheckinsEl.textContent = checkins.length;
+                        const completed = checkins.filter(c => c.status === 'complete').length;
+                        completedCountEl.textContent = completed;
+
+                        checkinBody.innerHTML = '';
+                        if (!checkins.length) {
+                            checkinBody.innerHTML = '<tr><td colspan="6" class="muted">No check-ins for today</td></tr>';
+                        } else {
+                            checkins.forEach(c => {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td>${formatTime(c.time)}</td>
+                                    <td>${escapeHtml(c.name)}</td>
+                                    <td>${escapeHtml(c.phone || '—')}</td>
+                                    <td>${escapeHtml(c.service_note)}</td>
+                                    <td>${c.duration_minutes ? c.duration_minutes + ' min' : '—'}</td>
+                                    <td><span class="status-badge status-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>
+                                `;
+                                checkinBody.appendChild(tr);
+                            });
+                        }
+                    });
+
+                loadReportData();
+            }
+
+            function loadReportData() {
+                const today = todayStr();
+                fetch(`/api/daily-report?date=${encodeURIComponent(today)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        moneyInput.value = (data.money_received || 0).toFixed(2);
+                        tipsInput.value = (data.tips || 0).toFixed(2);
+                        updateTotals();
+                    })
+                    .catch(() => updateTotals());
+            }
+
+            function updateTotals() {
+                const money = parseFloat(moneyInput.value) || 0;
+                const tips = parseFloat(tipsInput.value) || 0;
+                const total = money + tips;
+
+                displayMoney.textContent = money.toFixed(2);
+                displayTips.textContent = tips.toFixed(2);
+                displayTotal.textContent = total.toFixed(2);
+            }
+
+            saveReportBtn.addEventListener('click', () => {
+                const today = todayStr();
+                const money = parseFloat(moneyInput.value) || 0;
+                const tips = parseFloat(tipsInput.value) || 0;
+
+                fetch('/api/daily-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: today, money_received: money, tips })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    reportMessage.textContent = data.message || 'Report saved!';
+                    reportMessage.style.background = '#e9f7ef';
+                    reportMessage.style.color = '#2e9e5b';
+                    reportMessage.hidden = false;
+                    setTimeout(() => reportMessage.hidden = true, 3000);
+                })
+                .catch(err => {
+                    reportMessage.textContent = 'Error saving report';
+                    reportMessage.hidden = false;
+                });
+            });
+
+            moneyInput.addEventListener('input', updateTotals);
+            tipsInput.addEventListener('input', updateTotals);
+
+            loadReport();
+            setInterval(() => loadReport(), 10000);
+        })();
+    </script>
+</body>
+</html>
