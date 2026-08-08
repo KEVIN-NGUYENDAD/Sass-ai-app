@@ -315,16 +315,15 @@ def api_checkin():
         full_data["checkins"] = checkins
         _save_data(full_data)
 
-    confirm_url = f"{get_base_url()}/owner/confirm/{record['id']}?token={record['confirm_token']}"
-    send_sms(
-        OWNER_PHONE,
-        "New nail salon check-in!\n"
-        f"Name: {name}\n"
-        f"Phone: {phone or 'N/A'}\n"
-        f"Requested: {date_str} at {format_time_12h(time_str)}\n"
-        f"Service: {service_note}\n\n"
-        f"Confirm how long this will take: {confirm_url}",
+    # Send notification SMS to owner
+    sms_body = (
+        f"✂️ KHÁCH CHECK-IN\n"
+        f"👤 {name}\n"
+        f"⏰ {format_time_12h(time_str)}\n"
+        f"💅 {service_note}"
     )
+    logger.info(f"Sending check-in SMS to {OWNER_PHONE}: {sms_body}")
+    send_sms(OWNER_PHONE, sms_body)
 
     return jsonify({"checkin": record, "position_in_slot": position}), 201
 
