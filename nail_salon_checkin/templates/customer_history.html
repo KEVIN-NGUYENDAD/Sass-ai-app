@@ -5,44 +5,114 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customer History &ndash; Nail Salon Check-In</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .history-container {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .customer-list {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 16px;
+            min-height: 500px;
+        }
+        .customer-item {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: move;
+            border-left: 4px solid #60a5fa;
+            transition: all 0.2s;
+        }
+        .customer-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .customer-item.dragging {
+            opacity: 0.5;
+        }
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .timeline-bucket {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 300px;
+        }
+        .timeline-bucket h4 {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--ink);
+            font-weight: 600;
+        }
+        .timeline-bucket.drag-over {
+            background: #e9f7ef;
+            border-color: #10b981;
+        }
+        .customer-in-bucket {
+            background: #e0e9fb;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 3px solid #60a5fa;
+            font-size: 13px;
+            cursor: default;
+        }
+        .send-sms-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 12px;
+            background: #2c5aa0;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .send-sms-btn:hover {
+            background: #1e3f70;
+        }
+        @media (max-width: 1024px) {
+            .history-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="page">
         <header class="hero hero-compact">
-            <h1>👥 Customer History</h1>
-            <p>Track customer patterns and reach out proactively.</p>
+            <h1>👥 Customer Engagement</h1>
+            <p>Drag customers to push them to book again based on how long it's been.</p>
         </header>
 
-        <div class="card wide" style="margin-bottom: 20px;">
-            <div class="staff-toolbar">
-                <input type="search" id="searchInput" placeholder="Search by name or phone" style="flex: 1; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px;">
-                <select id="sortSelect" style="padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px;">
-                    <option value="last_visit">Last Visit (Newest)</option>
-                    <option value="frequency">Frequency (Most Visits)</option>
-                    <option value="name">Name (A-Z)</option>
-                </select>
+        <div class="history-container">
+            <!-- Customer List -->
+            <div>
+                <div class="customer-list" id="customerList">
+                    <h3 style="margin-bottom: 12px; font-size: 14px; color: var(--ink);">📋 All Customers</h3>
+                    <p class="muted" style="font-size: 13px;">Drag to timeline buckets →</p>
+                    <div id="customerItems" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- Timeline Buckets -->
+            <div>
+                <div class="timeline-grid" id="timelineBuckets"></div>
+                <button class="send-sms-btn" id="autoSendSmsBtn" style="width: 100%; margin-top: 16px; padding: 12px;">
+                    🤖 Auto Send SMS to 2+ Weeks
+                </button>
+                <p id="autoSmsMessage" class="error" hidden style="margin-top: 12px;"></p>
             </div>
         </div>
-
-        <main class="card wide">
-            <div style="overflow-x: auto;">
-                <table class="queue-table" style="min-width: 100%;">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Phone</th>
-                            <th>Total Visits</th>
-                            <th>Last Visit</th>
-                            <th>Avg Service</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="customerBody">
-                        <tr><td colspan="6" class="muted">Loading customer history...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </main>
 
         <footer class="footer">
             <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
@@ -53,36 +123,24 @@
         </footer>
     </div>
 
-    <div id="sendSmsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; pointer-events: none;">
-        <div class="card" style="max-width: 360px; margin: auto;">
-            <h2 style="margin-bottom: 16px;">Send Check-In Link</h2>
-            <p id="smsCustomerName" style="font-weight: 600; margin-bottom: 8px;"></p>
-            <p id="smsCustomerPhone" style="color: var(--muted); font-size: 14px; margin-bottom: 16px;"></p>
-            <div style="background: #fdf6f8; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
-                <p style="margin: 0; color: var(--muted);">Will send SMS with link to quick check-in.</p>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-primary" id="confirmSmsBtn" style="width: 100%;">Send SMS</button>
-                <button class="btn-secondary" id="cancelSmsBtn" style="width: 100%;">Cancel</button>
-            </div>
-            <p id="smsMessage" class="error" hidden style="margin-top: 12px;"></p>
-        </div>
-    </div>
-
     <script>
         (function() {
-            const searchInput = document.getElementById('searchInput');
-            const sortSelect = document.getElementById('sortSelect');
-            const customerBody = document.getElementById('customerBody');
-            const sendSmsModal = document.getElementById('sendSmsModal');
-            const smsCustomerName = document.getElementById('smsCustomerName');
-            const smsCustomerPhone = document.getElementById('smsCustomerPhone');
-            const confirmSmsBtn = document.getElementById('confirmSmsBtn');
-            const cancelSmsBtn = document.getElementById('cancelSmsBtn');
-            const smsMessage = document.getElementById('smsMessage');
+            const customerItems = document.getElementById('customerItems');
+            const timelineBuckets = document.getElementById('timelineBuckets');
+            const autoSendSmsBtn = document.getElementById('autoSendSmsBtn');
+            const autoSmsMessage = document.getElementById('autoSmsMessage');
+
+            const buckets = [
+                { weeks: 1, label: '1 Week', description: 'Last visit 1+ week ago' },
+                { weeks: 2, label: '2 Weeks', description: 'Last visit 2+ weeks ago' },
+                { weeks: 3, label: '3 Weeks', description: 'Last visit 3+ weeks ago' },
+                { weeks: 4, label: '1 Month', description: 'Last visit 1+ month ago' },
+                { weeks: 8, label: '2 Months', description: 'Last visit 2+ months ago' },
+            ];
 
             let allCustomers = [];
-            let pendingSmsPhone = null;
+            let draggedCustomer = null;
+            let bucketAssignments = {};
 
             function escapeHtml(text) {
                 const div = document.createElement('div');
@@ -90,132 +148,149 @@
                 return div.innerHTML;
             }
 
-            function formatDate(dateStr) {
-                if (!dateStr) return '—';
-                const d = new Date(dateStr);
-                return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            function getDaysAgo(dateStr) {
+                if (!dateStr) return 999999;
+                const d = new Date(dateStr + 'T00:00:00');
+                const now = new Date();
+                return Math.floor((now - d) / (1000 * 60 * 60 * 24));
             }
 
-            function loadCustomerHistory() {
+            function loadCustomers() {
                 fetch('/api/customer-history')
                     .then(res => res.json())
                     .then(data => {
                         allCustomers = data.customers || [];
-                        renderCustomers(allCustomers);
-                    })
-                    .catch(err => {
-                        console.error('Error loading customer history:', err);
-                        customerBody.innerHTML = '<tr><td colspan="6" class="muted">Error loading customer history</td></tr>';
+                        renderCustomers();
                     });
             }
 
-            function renderCustomers(customers) {
-                customerBody.innerHTML = '';
-                if (!customers.length) {
-                    customerBody.innerHTML = '<tr><td colspan="6" class="muted">No customer history yet</td></tr>';
+            function renderCustomers() {
+                customerItems.innerHTML = '';
+
+                allCustomers.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'customer-item';
+                    div.draggable = true;
+                    div.dataset.phone = c.phone;
+                    div.innerHTML = `
+                        <div style="font-weight: 600; font-size: 14px;">${escapeHtml(c.name)}</div>
+                        <div style="font-size: 12px; color: var(--muted);">${c.total_visits} visits</div>
+                    `;
+
+                    div.addEventListener('dragstart', (e) => {
+                        draggedCustomer = c;
+                        div.classList.add('dragging');
+                    });
+                    div.addEventListener('dragend', () => {
+                        div.classList.remove('dragging');
+                    });
+
+                    customerItems.appendChild(div);
+                });
+            }
+
+            function renderBuckets() {
+                timelineBuckets.innerHTML = '';
+
+                buckets.forEach((bucket, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'timeline-bucket';
+                    div.dataset.weeks = bucket.weeks;
+                    div.innerHTML = `
+                        <h4>${bucket.label}</h4>
+                        <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">${bucket.description}</p>
+                        <div id="bucket-${idx}" style="min-height: 200px;"></div>
+                    `;
+
+                    div.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        div.classList.add('drag-over');
+                    });
+
+                    div.addEventListener('dragleave', () => {
+                        div.classList.remove('drag-over');
+                    });
+
+                    div.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        div.classList.remove('drag-over');
+
+                        if (draggedCustomer) {
+                            bucketAssignments[draggedCustomer.phone] = bucket.weeks;
+                            updateBucketDisplay();
+                        }
+                    });
+
+                    timelineBuckets.appendChild(div);
+                });
+
+                updateBucketDisplay();
+            }
+
+            function updateBucketDisplay() {
+                buckets.forEach((bucket, idx) => {
+                    const bucketDiv = document.getElementById(`bucket-${idx}`);
+                    bucketDiv.innerHTML = '';
+
+                    const customersInBucket = allCustomers.filter(c =>
+                        bucketAssignments[c.phone] === bucket.weeks
+                    );
+
+                    if (!customersInBucket.length) {
+                        bucketDiv.innerHTML = '<p class="muted" style="font-size: 13px;">Drag customers here</p>';
+                    } else {
+                        customersInBucket.forEach(c => {
+                            const div = document.createElement('div');
+                            div.className = 'customer-in-bucket';
+                            div.innerHTML = `${escapeHtml(c.name)}<br><span style="font-size: 11px; color: var(--muted);">${c.phone}</span>`;
+                            bucketDiv.appendChild(div);
+                        });
+                    }
+                });
+            }
+
+            autoSendSmsBtn.addEventListener('click', () => {
+                autoSendSmsBtn.disabled = true;
+
+                // Get all customers assigned to 2+ weeks bucket
+                const customersToNotify = allCustomers.filter(c =>
+                    (bucketAssignments[c.phone] || 999) >= 2
+                );
+
+                if (!customersToNotify.length) {
+                    autoSmsMessage.textContent = 'No customers to notify';
+                    autoSmsMessage.hidden = false;
+                    autoSendSmsBtn.disabled = false;
                     return;
                 }
 
-                customers.forEach(c => {
-                    const tr = document.createElement('tr');
-                    const avgService = c.total_visits > 0
-                        ? Math.round(c.total_duration / c.total_visits)
-                        : 0;
-
-                    tr.innerHTML = `
-                        <td>${escapeHtml(c.name)}</td>
-                        <td>${escapeHtml(c.phone || '—')}</td>
-                        <td style="text-align: center; font-weight: 600;">${c.total_visits}</td>
-                        <td>${formatDate(c.last_visit_date)}</td>
-                        <td style="text-align: center;">${avgService} min</td>
-                        <td>
-                            <button class="btn-secondary" style="width: 100%; padding: 6px 8px; font-size: 12px;" data-phone="${escapeHtml(c.phone)}">
-                                Send SMS
-                            </button>
-                        </td>
-                    `;
-
-                    const btn = tr.querySelector('button');
-                    if (c.phone) {
-                        btn.addEventListener('click', () => showSmsModal(c));
-                    } else {
-                        btn.disabled = true;
-                        btn.style.opacity = '0.5';
-                    }
-
-                    customerBody.appendChild(tr);
-                });
-            }
-
-            function showSmsModal(customer) {
-                pendingSmsPhone = customer.phone;
-                smsCustomerName.textContent = customer.name;
-                smsCustomerPhone.textContent = customer.phone;
-                smsMessage.hidden = true;
-                sendSmsModal.style.cssText = 'display: flex !important; pointer-events: auto !important;';
-            }
-
-            function closeSmsModal() {
-                sendSmsModal.style.cssText = 'display: none !important; pointer-events: none !important;';
-                pendingSmsPhone = null;
-            }
-
-            confirmSmsBtn.addEventListener('click', () => {
-                if (!pendingSmsPhone) return;
-
-                confirmSmsBtn.disabled = true;
-                fetch('/api/send-checkin-link', {
+                fetch('/api/send-bulk-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: pendingSmsPhone })
+                    body: JSON.stringify({
+                        phones: customersToNotify.map(c => c.phone)
+                    })
                 })
                 .then(res => res.json())
                 .then(data => {
-                    smsMessage.textContent = data.message || 'SMS sent successfully!';
-                    smsMessage.style.background = '#e9f7ef';
-                    smsMessage.style.color = '#2e9e5b';
-                    smsMessage.hidden = false;
-                    setTimeout(() => closeSmsModal(), 2000);
+                    autoSmsMessage.textContent = `✓ SMS sent to ${customersToNotify.length} customers!`;
+                    autoSmsMessage.style.background = '#e9f7ef';
+                    autoSmsMessage.style.color = '#2e9e5b';
+                    autoSmsMessage.hidden = false;
+                    setTimeout(() => autoSmsMessage.hidden = true, 3000);
                 })
                 .catch(err => {
-                    smsMessage.textContent = 'Error sending SMS';
-                    smsMessage.hidden = false;
-                    confirmSmsBtn.disabled = false;
+                    autoSmsMessage.textContent = 'Error sending SMS';
+                    autoSmsMessage.hidden = false;
+                })
+                .finally(() => {
+                    autoSendSmsBtn.disabled = false;
                 });
             });
 
-            cancelSmsBtn.addEventListener('click', closeSmsModal);
-
-            sendSmsModal.addEventListener('click', (e) => {
-                if (e.target === sendSmsModal) closeSmsModal();
-            });
-
-            searchInput.addEventListener('input', () => {
-                const query = searchInput.value.toLowerCase();
-                const filtered = allCustomers.filter(c =>
-                    c.name.toLowerCase().includes(query) ||
-                    (c.phone || '').includes(query)
-                );
-                renderCustomers(filtered);
-            });
-
-            sortSelect.addEventListener('change', () => {
-                let sorted = [...allCustomers];
-                const sortBy = sortSelect.value;
-
-                if (sortBy === 'last_visit') {
-                    sorted.sort((a, b) => new Date(b.last_visit_date || 0) - new Date(a.last_visit_date || 0));
-                } else if (sortBy === 'frequency') {
-                    sorted.sort((a, b) => b.total_visits - a.total_visits);
-                } else if (sortBy === 'name') {
-                    sorted.sort((a, b) => a.name.localeCompare(b.name));
-                }
-
-                renderCustomers(sorted);
-            });
-
-            loadCustomerHistory();
-            setInterval(() => loadCustomerHistory(), 30000);
+            loadCustomers();
+            renderBuckets();
+            setInterval(() => loadCustomers(), 30000);
         })();
     </script>
 </body>
