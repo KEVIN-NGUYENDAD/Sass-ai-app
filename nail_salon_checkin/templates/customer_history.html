@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer History &ndash; Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero hero-compact">
+            <h1>👥 Customer History</h1>
+            <p>Track customer patterns and reach out proactively.</p>
+        </header>
+
+        <div class="card wide" style="margin-bottom: 20px;">
+            <div class="staff-toolbar">
+                <input type="search" id="searchInput" placeholder="Search by name or phone" style="flex: 1; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px;">
+                <select id="sortSelect" style="padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px;">
+                    <option value="last_visit">Last Visit (Newest)</option>
+                    <option value="frequency">Frequency (Most Visits)</option>
+                    <option value="name">Name (A-Z)</option>
+                </select>
+            </div>
+        </div>
+
+        <main class="card wide">
+            <div style="overflow-x: auto;">
+                <table class="queue-table" style="min-width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Total Visits</th>
+                            <th>Last Visit</th>
+                            <th>Avg Service</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customerBody">
+                        <tr><td colspan="6" class="muted">Loading customer history...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+                <a href="/staff">&larr; Back to queue</a>
+                <span style="color: var(--border);">·</span>
+                <a href="/daily-report">💰 Daily Report</a>
+            </div>
+        </footer>
+    </div>
+
+    <div id="sendSmsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; pointer-events: none;">
+        <div class="card" style="max-width: 360px; margin: auto;">
+            <h2 style="margin-bottom: 16px;">Send Check-In Link</h2>
+            <p id="smsCustomerName" style="font-weight: 600; margin-bottom: 8px;"></p>
+            <p id="smsCustomerPhone" style="color: var(--muted); font-size: 14px; margin-bottom: 16px;"></p>
+            <div style="background: #fdf6f8; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+                <p style="margin: 0; color: var(--muted);">Will send SMS with link to quick check-in.</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-primary" id="confirmSmsBtn" style="width: 100%;">Send SMS</button>
+                <button class="btn-secondary" id="cancelSmsBtn" style="width: 100%;">Cancel</button>
+            </div>
+            <p id="smsMessage" class="error" hidden style="margin-top: 12px;"></p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const searchInput = document.getElementById('searchInput');
+            const sortSelect = document.getElementById('sortSelect');
+            const customerBody = document.getElementById('customerBody');
+            const sendSmsModal = document.getElementById('sendSmsModal');
+            const smsCustomerName = document.getElementById('smsCustomerName');
+            const smsCustomerPhone = document.getElementById('smsCustomerPhone');
+            const confirmSmsBtn = document.getElementById('confirmSmsBtn');
+            const cancelSmsBtn = document.getElementById('cancelSmsBtn');
+            const smsMessage = document.getElementById('smsMessage');
+
+            let allCustomers = [];
+            let pendingSmsPhone = null;
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function formatDate(dateStr) {
+                if (!dateStr) return '—';
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+
+            function loadCustomerHistory() {
+                fetch('/api/customer-history')
+                    .then(res => res.json())
+                    .then(data => {
+                        allCustomers = data.customers || [];
+                        renderCustomers(allCustomers);
+                    })
+                    .catch(err => {
+                        console.error('Error loading customer history:', err);
+                        customerBody.innerHTML = '<tr><td colspan="6" class="muted">Error loading customer history</td></tr>';
+                    });
+            }
+
+            function renderCustomers(customers) {
+                customerBody.innerHTML = '';
+                if (!customers.length) {
+                    customerBody.innerHTML = '<tr><td colspan="6" class="muted">No customer history yet</td></tr>';
+                    return;
+                }
+
+                customers.forEach(c => {
+                    const tr = document.createElement('tr');
+                    const avgService = c.total_visits > 0
+                        ? Math.round(c.total_duration / c.total_visits)
+                        : 0;
+
+                    tr.innerHTML = `
+                        <td>${escapeHtml(c.name)}</td>
+                        <td>${escapeHtml(c.phone || '—')}</td>
+                        <td style="text-align: center; font-weight: 600;">${c.total_visits}</td>
+                        <td>${formatDate(c.last_visit_date)}</td>
+                        <td style="text-align: center;">${avgService} min</td>
+                        <td>
+                            <button class="btn-secondary" style="width: 100%; padding: 6px 8px; font-size: 12px;" data-phone="${escapeHtml(c.phone)}">
+                                Send SMS
+                            </button>
+                        </td>
+                    `;
+
+                    const btn = tr.querySelector('button');
+                    if (c.phone) {
+                        btn.addEventListener('click', () => showSmsModal(c));
+                    } else {
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                    }
+
+                    customerBody.appendChild(tr);
+                });
+            }
+
+            function showSmsModal(customer) {
+                pendingSmsPhone = customer.phone;
+                smsCustomerName.textContent = customer.name;
+                smsCustomerPhone.textContent = customer.phone;
+                smsMessage.hidden = true;
+                sendSmsModal.style.cssText = 'display: flex !important; pointer-events: auto !important;';
+            }
+
+            function closeSmsModal() {
+                sendSmsModal.style.cssText = 'display: none !important; pointer-events: none !important;';
+                pendingSmsPhone = null;
+            }
+
+            confirmSmsBtn.addEventListener('click', () => {
+                if (!pendingSmsPhone) return;
+
+                confirmSmsBtn.disabled = true;
+                fetch('/api/send-checkin-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: pendingSmsPhone })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    smsMessage.textContent = data.message || 'SMS sent successfully!';
+                    smsMessage.style.background = '#e9f7ef';
+                    smsMessage.style.color = '#2e9e5b';
+                    smsMessage.hidden = false;
+                    setTimeout(() => closeSmsModal(), 2000);
+                })
+                .catch(err => {
+                    smsMessage.textContent = 'Error sending SMS';
+                    smsMessage.hidden = false;
+                    confirmSmsBtn.disabled = false;
+                });
+            });
+
+            cancelSmsBtn.addEventListener('click', closeSmsModal);
+
+            sendSmsModal.addEventListener('click', (e) => {
+                if (e.target === sendSmsModal) closeSmsModal();
+            });
+
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase();
+                const filtered = allCustomers.filter(c =>
+                    c.name.toLowerCase().includes(query) ||
+                    (c.phone || '').includes(query)
+                );
+                renderCustomers(filtered);
+            });
+
+            sortSelect.addEventListener('change', () => {
+                let sorted = [...allCustomers];
+                const sortBy = sortSelect.value;
+
+                if (sortBy === 'last_visit') {
+                    sorted.sort((a, b) => new Date(b.last_visit_date || 0) - new Date(a.last_visit_date || 0));
+                } else if (sortBy === 'frequency') {
+                    sorted.sort((a, b) => b.total_visits - a.total_visits);
+                } else if (sortBy === 'name') {
+                    sorted.sort((a, b) => a.name.localeCompare(b.name));
+                }
+
+                renderCustomers(sorted);
+            });
+
+            loadCustomerHistory();
+            setInterval(() => loadCustomerHistory(), 30000);
+        })();
+    </script>
+</body>
+</html>

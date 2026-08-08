@@ -511,6 +511,79 @@ def save_daily_report():
     return jsonify({"message": "Report saved successfully"})
 
 
+@app.route("/customer-history")
+def customer_history_page():
+    if not session.get("staff_authenticated"):
+        return redirect("/staff-login")
+    return render_template("customer_history.html")
+
+
+@app.route("/api/customer-history")
+def get_customer_history():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        with _lock:
+            data = _load_data()
+    except FileNotFoundError:
+        return jsonify({"customers": []})
+
+    checkins = data.get("checkins", [])
+
+    customer_map = {}
+    for c in checkins:
+        phone = c.get("phone", "")
+        name = c.get("name", "Unknown")
+
+        if phone not in customer_map:
+            customer_map[phone] = {
+                "name": name,
+                "phone": phone,
+                "total_visits": 0,
+                "total_duration": 0,
+                "last_visit_date": None,
+                "services": []
+            }
+
+        customer_map[phone]["total_visits"] += 1
+        duration = c.get("duration_minutes", 0)
+        customer_map[phone]["total_duration"] += duration
+
+        visit_date = c.get("date", "")
+        if visit_date and (not customer_map[phone]["last_visit_date"] or visit_date > customer_map[phone]["last_visit_date"]):
+            customer_map[phone]["last_visit_date"] = visit_date
+
+        service = c.get("service_note", "")
+        if service and service not in customer_map[phone]["services"]:
+            customer_map[phone]["services"].append(service)
+
+    customers = list(customer_map.values())
+    customers.sort(key=lambda x: x.get("last_visit_date", "") or "", reverse=True)
+
+    return jsonify({"customers": customers})
+
+
+@app.route("/api/send-checkin-link", methods=["POST"])
+def send_checkin_link():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    req = request.get_json()
+    phone = req.get("phone", "").strip()
+
+    if not phone:
+        return jsonify({"error": "Phone number required"}), 400
+
+    checkin_link = get_base_url() + "/"
+    message = f"Hi! Quick reminder to book your next appointment at Nail Salon. Click here to check in: {checkin_link}"
+
+    send_sms(phone, message)
+    logger.info("Sent check-in link SMS to %s", phone)
+
+    return jsonify({"message": "SMS sent successfully!"})
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "app": "Nail Salon Check-In"}), 200
