@@ -1,2 +1,3 @@
 __pycache__/
 *.pyc
+nail_salon_checkin/data/checkins.json

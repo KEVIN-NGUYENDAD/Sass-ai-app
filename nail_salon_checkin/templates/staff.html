@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Queue &ndash; Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero hero-compact">
+            <h1>Today's Queue</h1>
+            <p>Live list of customer check-ins.</p>
+        </header>
+
+        <main class="card wide">
+            <div class="staff-toolbar">
+                <label for="staffDate">Date</label>
+                <input type="date" id="staffDate">
+                <button class="btn-secondary" id="refreshBtn">Refresh</button>
+            </div>
+
+            <table class="queue-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Service note</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="queueBody">
+                    <tr><td colspan="6" class="muted">Loading&hellip;</td></tr>
+                </tbody>
+            </table>
+        </main>
+
+        <footer class="footer">
+            <a href="/">&larr; Back to check-in</a>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='staff.js') }}"></script>
+</body>
+</html>

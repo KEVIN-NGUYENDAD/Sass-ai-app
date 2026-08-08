@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero">
+            <h1>&#128133; Nail Salon Check-In</h1>
+            <p>Pick a 30-minute slot, tell us what you'd like done, and we'll see you soon.</p>
+        </header>
+
+        <main class="card">
+            <div id="formView">
+                <form id="checkinForm" novalidate>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="name">Your name *</label>
+                            <input type="text" id="name" name="name" placeholder="e.g. Jane Smith" required>
+                        </div>
+                        <div class="field">
+                            <label for="phone">Phone number</label>
+                            <input type="tel" id="phone" name="phone" placeholder="e.g. (555) 123-4567">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="date">Date</label>
+                        <input type="date" id="date" name="date" required>
+                    </div>
+
+                    <div class="field">
+                        <label>Choose a time slot *</label>
+                        <p class="hint">Each slot is 30 minutes long.</p>
+                        <div id="slotGrid" class="slot-grid">
+                            <p class="muted">Loading available times&hellip;</p>
+                        </div>
+                        <input type="hidden" id="selectedTime" name="time">
+                    </div>
+
+                    <div class="field">
+                        <label>Popular services</label>
+                        <div class="chip-row" id="serviceChips">
+                            <button type="button" class="chip" data-service="Manicure">Manicure</button>
+                            <button type="button" class="chip" data-service="Pedicure">Pedicure</button>
+                            <button type="button" class="chip" data-service="Gel Manicure">Gel Manicure</button>
+                            <button type="button" class="chip" data-service="Full Set (Acrylic)">Full Set (Acrylic)</button>
+                            <button type="button" class="chip" data-service="Dip Powder">Dip Powder</button>
+                            <button type="button" class="chip" data-service="Fill-In">Fill-In</button>
+                            <button type="button" class="chip" data-service="Nail Art">Nail Art</button>
+                            <button type="button" class="chip" data-service="Polish Change">Polish Change</button>
+                            <button type="button" class="chip" data-service="Kids Manicure">Kids Manicure</button>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="serviceNote">Note: what service would you like? *</label>
+                        <textarea id="serviceNote" name="service_note" rows="3"
+                            placeholder="e.g. Gel manicure with a French tip, and a classic pedicure. Nails are short."
+                            required></textarea>
+                    </div>
+
+                    <p id="formError" class="error" hidden></p>
+
+                    <button type="submit" class="btn-primary" id="submitBtn">Check In</button>
+                </form>
+            </div>
+
+            <div id="confirmView" class="confirm" hidden>
+                <div class="confirm-icon">&#10003;</div>
+                <h2>You're checked in!</h2>
+                <p>Thanks, <span id="confirmName"></span>. Here are your details:</p>
+                <dl class="confirm-details">
+                    <dt>Date</dt><dd id="confirmDate"></dd>
+                    <dt>Time</dt><dd id="confirmTime"></dd>
+                    <dt>Service note</dt><dd id="confirmNote"></dd>
+                </dl>
+                <p class="muted">Please have a seat &mdash; a technician will call your name.</p>
+                <button class="btn-secondary" id="newCheckinBtn">Check In Another Customer</button>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <a href="/staff">Staff view</a>
+        </footer>
+    </div>
+
+    <script>
+        window.SALON_CONFIG = {
+            openHour: {{ open_hour }},
+            closeHour: {{ close_hour }},
+            slotMinutes: {{ slot_minutes }},
+            maxDaysAhead: {{ max_days_ahead }}
+        };
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
