@@ -47,8 +47,12 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "checkins.json")
+IMAGES_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads")
 
 STATUSES = ("waiting_confirm", "confirmed", "in_service", "complete", "cancelled")
+
+# Allowed image extensions
+ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
 
 _lock = threading.Lock()
 
@@ -93,6 +97,30 @@ def get_base_url():
     if root.startswith("http://") and "localhost" not in root and "127.0.0.1" not in root:
         root = "https://" + root[len("http://"):]
     return root
+
+
+def save_checkin_image(file):
+    """Save an uploaded checkin image and return the path relative to static dir."""
+    if not file or file.filename == '':
+        return None
+
+    filename = file.filename.lower()
+    ext = filename.rsplit('.', 1)[1] if '.' in filename else ''
+
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return None
+
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+
+    safe_filename = f"checkin_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(IMAGES_DIR, safe_filename)
+
+    try:
+        file.save(filepath)
+        return f"/static/uploads/{safe_filename}"
+    except Exception:
+        logger.exception("Failed to save checkin image")
+        return None
 
 
 def format_time_12h(t):
@@ -263,12 +291,12 @@ def api_slots():
 
 @app.route("/api/checkin", methods=["POST"])
 def api_checkin():
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
-    phone = (data.get("phone") or "").strip()
-    date_str = (data.get("date") or "").strip()
-    time_str = (data.get("time") or "").strip()
-    service_note = (data.get("service_note") or "").strip()
+    name = (request.form.get("name") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    date_str = (request.form.get("date") or "").strip()
+    time_str = (request.form.get("time") or "").strip()
+    service_note = (request.form.get("service_note") or "").strip()
+    photo = request.files.get("photo")
 
     if not name:
         return jsonify({"error": "Name is required"}), 400
@@ -288,6 +316,11 @@ def api_checkin():
             return jsonify({"error": "That time slot just filled up. Please pick another."}), 409
 
         position = booked + 1
+
+        photo_url = None
+        if photo:
+            photo_url = save_checkin_image(photo)
+
         record = {
             "id": uuid.uuid4().hex[:8],
             "name": name,
@@ -299,6 +332,7 @@ def api_checkin():
             "duration_minutes": None,
             "confirmed": False,
             "confirm_token": uuid.uuid4().hex,
+            "photo_url": photo_url,
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
         checkins.append(record)
