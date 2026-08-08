@@ -6,84 +6,61 @@
     <title>Customer History &ndash; Nail Salon Check-In</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        .history-container {
-            display: grid;
-            grid-template-columns: 1fr 3fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        .customer-list {
-            background: #f3f4f6;
-            border-radius: 12px;
-            padding: 16px;
-            min-height: 500px;
-        }
-        .customer-item {
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            cursor: move;
-            border-left: 4px solid #60a5fa;
-            transition: all 0.2s;
-        }
-        .customer-item:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-        .customer-item.dragging {
-            opacity: 0.5;
-        }
         .timeline-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
+            margin-bottom: 20px;
         }
         .timeline-bucket {
             background: white;
-            border: 2px solid #e5e7eb;
+            border: 2px solid var(--border);
             border-radius: 8px;
             padding: 16px;
             min-height: 300px;
         }
         .timeline-bucket h4 {
-            margin-bottom: 12px;
+            margin-bottom: 4px;
             font-size: 14px;
             color: var(--ink);
             font-weight: 600;
         }
-        .timeline-bucket.drag-over {
-            background: #e9f7ef;
-            border-color: #10b981;
+        .timeline-bucket .desc {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 12px;
         }
-        .customer-in-bucket {
+        .customer-card {
             background: #e0e9fb;
-            padding: 10px;
+            padding: 12px;
             border-radius: 6px;
             margin-bottom: 8px;
             border-left: 3px solid #60a5fa;
             font-size: 13px;
-            cursor: default;
         }
-        .send-sms-btn {
-            width: 100%;
-            padding: 8px;
-            margin-top: 12px;
-            background: #2c5aa0;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 12px;
+        .customer-name {
             font-weight: 600;
-            cursor: pointer;
+            color: #1e40af;
+            margin-bottom: 2px;
         }
-        .send-sms-btn:hover {
-            background: #1e3f70;
+        .customer-phone {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
         }
-        @media (max-width: 1024px) {
-            .history-container {
-                grid-template-columns: 1fr;
-            }
+        .customer-money {
+            font-size: 12px;
+            color: #10b981;
+            font-weight: 600;
+        }
+        .sms-badge {
+            display: inline-block;
+            background: #fef08a;
+            color: #92400e;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 4px;
         }
     </style>
 </head>
@@ -91,27 +68,24 @@
     <div class="page">
         <header class="hero hero-compact">
             <h1>👥 Customer Engagement</h1>
-            <p>Drag customers to push them to book again based on how long it's been.</p>
+            <p>Auto-updates customer visit history and sends SMS reminders.</p>
         </header>
 
-        <div class="history-container">
-            <!-- Customer List -->
-            <div>
-                <div class="customer-list" id="customerList">
-                    <h3 style="margin-bottom: 12px; font-size: 14px; color: var(--ink);">📋 All Customers</h3>
-                    <p class="muted" style="font-size: 13px;">Drag to timeline buckets →</p>
-                    <div id="customerItems" style="margin-top: 12px;"></div>
-                </div>
-            </div>
+        <div class="card wide" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 12px; font-size: 14px; color: var(--ink);">⏰ Customer Timeline</h3>
+            <p class="muted" style="font-size: 13px; margin-bottom: 16px;">
+                ✓ Auto-updates with customer info • Auto-sends SMS to 2+ weeks • Last 5 min refresh
+            </p>
+            <div class="timeline-grid" id="timelineBuckets"></div>
+        </div>
 
-            <!-- Timeline Buckets -->
-            <div>
-                <div class="timeline-grid" id="timelineBuckets"></div>
-                <button class="send-sms-btn" id="autoSendSmsBtn" style="width: 100%; margin-top: 16px; padding: 12px;">
-                    🤖 Auto Send SMS to 2+ Weeks
-                </button>
-                <p id="autoSmsMessage" class="error" hidden style="margin-top: 12px;"></p>
+        <div class="card wide">
+            <h3 style="margin-bottom: 12px; font-size: 14px; color: var(--ink);">📊 Auto-SMS Status</h3>
+            <div id="smsStatus" style="padding: 12px; background: #e9f7ef; border-radius: 8px; color: #2e9e5b; font-size: 13px;">
+                <p style="margin: 0;">✓ Auto SMS enabled for customers 2+ weeks without visit</p>
+                <p style="margin: 4px 0 0 0; color: var(--muted);">SMS sent: <span id="smsSentCount">0</span> customers</p>
             </div>
+            <p id="smsMessage" hidden style="margin-top: 12px; padding: 12px; border-radius: 8px;"></p>
         </div>
 
         <footer class="footer">
@@ -125,22 +99,21 @@
 
     <script>
         (function() {
-            const customerItems = document.getElementById('customerItems');
             const timelineBuckets = document.getElementById('timelineBuckets');
-            const autoSendSmsBtn = document.getElementById('autoSendSmsBtn');
-            const autoSmsMessage = document.getElementById('autoSmsMessage');
+            const smsMessage = document.getElementById('smsMessage');
+            const smsSentCount = document.getElementById('smsSentCount');
 
             const buckets = [
-                { weeks: 1, label: '1 Week', description: 'Last visit 1+ week ago' },
-                { weeks: 2, label: '2 Weeks', description: 'Last visit 2+ weeks ago' },
-                { weeks: 3, label: '3 Weeks', description: 'Last visit 3+ weeks ago' },
-                { weeks: 4, label: '1 Month', description: 'Last visit 1+ month ago' },
-                { weeks: 8, label: '2 Months', description: 'Last visit 2+ months ago' },
+                { days: 7, label: '1 Week', desc: 'Last visit 7+ days ago', autoSms: false },
+                { days: 14, label: '2 Weeks', desc: 'Last visit 14+ days ago', autoSms: true },
+                { days: 21, label: '3 Weeks', desc: 'Last visit 21+ days ago', autoSms: true },
+                { days: 30, label: '1 Month', desc: 'Last visit 30+ days ago', autoSms: true },
+                { days: 60, label: '2 Months', desc: 'Last visit 60+ days ago', autoSms: true },
             ];
 
             let allCustomers = [];
-            let draggedCustomer = null;
-            let bucketAssignments = {};
+            let smsSentToday = new Set();
+            let lastUpdate = 0;
 
             function escapeHtml(text) {
                 const div = document.createElement('div');
@@ -160,137 +133,90 @@
                     .then(res => res.json())
                     .then(data => {
                         allCustomers = data.customers || [];
-                        renderCustomers();
+                        renderBuckets();
+                        checkAndSendSms();
                     });
-            }
-
-            function renderCustomers() {
-                customerItems.innerHTML = '';
-
-                allCustomers.forEach(c => {
-                    const div = document.createElement('div');
-                    div.className = 'customer-item';
-                    div.draggable = true;
-                    div.dataset.phone = c.phone;
-                    div.innerHTML = `
-                        <div style="font-weight: 600; font-size: 14px;">${escapeHtml(c.name)}</div>
-                        <div style="font-size: 12px; color: var(--muted);">${c.total_visits} visits</div>
-                    `;
-
-                    div.addEventListener('dragstart', (e) => {
-                        draggedCustomer = c;
-                        div.classList.add('dragging');
-                    });
-                    div.addEventListener('dragend', () => {
-                        div.classList.remove('dragging');
-                    });
-
-                    customerItems.appendChild(div);
-                });
             }
 
             function renderBuckets() {
                 timelineBuckets.innerHTML = '';
 
-                buckets.forEach((bucket, idx) => {
+                buckets.forEach((bucket) => {
                     const div = document.createElement('div');
                     div.className = 'timeline-bucket';
-                    div.dataset.weeks = bucket.weeks;
                     div.innerHTML = `
                         <h4>${bucket.label}</h4>
-                        <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">${bucket.description}</p>
-                        <div id="bucket-${idx}" style="min-height: 200px;"></div>
+                        <div class="desc">${bucket.desc}</div>
+                        <div id="bucket-${bucket.days}" style="min-height: 150px;"></div>
                     `;
-
-                    div.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        div.classList.add('drag-over');
-                    });
-
-                    div.addEventListener('dragleave', () => {
-                        div.classList.remove('drag-over');
-                    });
-
-                    div.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        div.classList.remove('drag-over');
-
-                        if (draggedCustomer) {
-                            bucketAssignments[draggedCustomer.phone] = bucket.weeks;
-                            updateBucketDisplay();
-                        }
-                    });
 
                     timelineBuckets.appendChild(div);
                 });
 
-                updateBucketDisplay();
-            }
+                buckets.forEach((bucket) => {
+                    const bucketDiv = document.getElementById(`bucket-${bucket.days}`);
+                    const customers = allCustomers.filter(c => {
+                        const daysAgo = getDaysAgo(c.last_visit_date);
+                        return daysAgo >= bucket.days && (bucket === buckets[buckets.length - 1] || daysAgo < buckets[buckets.indexOf(bucket) + 1].days);
+                    });
 
-            function updateBucketDisplay() {
-                buckets.forEach((bucket, idx) => {
-                    const bucketDiv = document.getElementById(`bucket-${idx}`);
-                    bucketDiv.innerHTML = '';
-
-                    const customersInBucket = allCustomers.filter(c =>
-                        bucketAssignments[c.phone] === bucket.weeks
-                    );
-
-                    if (!customersInBucket.length) {
-                        bucketDiv.innerHTML = '<p class="muted" style="font-size: 13px;">Drag customers here</p>';
+                    if (!customers.length) {
+                        bucketDiv.innerHTML = '<p class="muted" style="font-size: 12px;">No customers</p>';
                     } else {
-                        customersInBucket.forEach(c => {
-                            const div = document.createElement('div');
-                            div.className = 'customer-in-bucket';
-                            div.innerHTML = `${escapeHtml(c.name)}<br><span style="font-size: 11px; color: var(--muted);">${c.phone}</span>`;
-                            bucketDiv.appendChild(div);
+                        bucketDiv.innerHTML = '';
+                        customers.forEach(c => {
+                            const card = document.createElement('div');
+                            card.className = 'customer-card';
+                            const daysAgo = getDaysAgo(c.last_visit_date);
+                            const smsSent = smsSentToday.has(c.phone);
+
+                            card.innerHTML = `
+                                <div class="customer-name">${escapeHtml(c.name)}</div>
+                                <div class="customer-phone">${escapeHtml(c.phone || '—')}</div>
+                                <div class="customer-money">💵 ${c.total_visits || 0} visits</div>
+                                ${smsSent ? '<div class="sms-badge">📱 SMS Sent</div>' : ''}
+                            `;
+                            bucketDiv.appendChild(card);
                         });
                     }
                 });
             }
 
-            autoSendSmsBtn.addEventListener('click', () => {
-                autoSendSmsBtn.disabled = true;
-
-                // Get all customers assigned to 2+ weeks bucket
-                const customersToNotify = allCustomers.filter(c =>
-                    (bucketAssignments[c.phone] || 999) >= 2
-                );
-
-                if (!customersToNotify.length) {
-                    autoSmsMessage.textContent = 'No customers to notify';
-                    autoSmsMessage.hidden = false;
-                    autoSendSmsBtn.disabled = false;
-                    return;
-                }
-
-                fetch('/api/send-bulk-sms', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        phones: customersToNotify.map(c => c.phone)
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    autoSmsMessage.textContent = `✓ SMS sent to ${customersToNotify.length} customers!`;
-                    autoSmsMessage.style.background = '#e9f7ef';
-                    autoSmsMessage.style.color = '#2e9e5b';
-                    autoSmsMessage.hidden = false;
-                    setTimeout(() => autoSmsMessage.hidden = true, 3000);
-                })
-                .catch(err => {
-                    autoSmsMessage.textContent = 'Error sending SMS';
-                    autoSmsMessage.hidden = false;
-                })
-                .finally(() => {
-                    autoSendSmsBtn.disabled = false;
+            function checkAndSendSms() {
+                // Send SMS to customers 2+ weeks without auto-repeat
+                const customersToSms = allCustomers.filter(c => {
+                    const daysAgo = getDaysAgo(c.last_visit_date);
+                    return daysAgo >= 14 && !smsSentToday.has(c.phone) && c.phone;
                 });
-            });
+
+                if (customersToSms.length > 0) {
+                    fetch('/api/send-bulk-sms', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phones: customersToSms.map(c => c.phone)
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        customersToSms.forEach(c => smsSentToday.add(c.phone));
+                        smsSentCount.textContent = smsSentToday.size;
+
+                        smsMessage.textContent = `✓ SMS sent to ${customersToSms.length} customers who haven't visited 2+ weeks`;
+                        smsMessage.style.background = '#e9f7ef';
+                        smsMessage.style.color = '#2e9e5b';
+                        smsMessage.hidden = false;
+
+                        setTimeout(() => smsMessage.hidden = true, 5000);
+                    })
+                    .catch(err => {
+                        console.log('SMS send error (will retry):', err);
+                    });
+                }
+            }
 
             loadCustomers();
-            renderBuckets();
-            setInterval(() => loadCustomers(), 30000);
+            setInterval(() => loadCustomers(), 5 * 60 * 1000); // Every 5 minutes
         })();
     </script>
 </body>
