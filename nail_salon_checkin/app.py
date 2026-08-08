@@ -30,7 +30,7 @@ CLOSE_MINUTE = 0
 SLOT_MINUTES = 30      # each check-in slot is 30 minutes
 CHAIRS_PER_SLOT = 1    # how many customers can be seated in the same slot
 MAX_DAYS_AHEAD = 7      # customers can check in for today .. +6 days
-DURATION_OPTIONS = (30, 60)  # minutes the owner can confirm a service will take
+DURATION_OPTIONS = (30, 45, 60)  # minutes the owner can confirm a service will take
 
 OWNER_PHONE = os.environ.get("OWNER_PHONE", "+16237604999")
 BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checkin.onrender.com
@@ -48,7 +48,7 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "checkins.json")
 
-STATUSES = ("waiting", "confirmed", "in_service", "done", "cancelled")
+STATUSES = ("waiting_confirm", "confirmed", "in_service", "complete", "cancelled")
 
 _lock = threading.Lock()
 
@@ -265,7 +265,7 @@ def api_checkin():
             "date": date_str,
             "time": time_str,
             "service_note": service_note,
-            "status": "waiting",
+            "status": "waiting_confirm",
             "duration_minutes": None,
             "confirmed": False,
             "confirm_token": uuid.uuid4().hex,
@@ -432,7 +432,7 @@ def api_checkin_by_staff():
             "date": date_str,
             "time": time_str,
             "service_note": service_note,
-            "status": "waiting",
+            "status": "waiting_confirm",
             "duration_minutes": duration_minutes,
             "confirmed": True,
             "confirm_token": uuid.uuid4().hex,

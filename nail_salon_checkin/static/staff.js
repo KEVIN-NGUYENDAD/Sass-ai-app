@@ -14,6 +14,7 @@
     const confirmModalName = document.getElementById('confirmModalName');
     const confirmModalTime = document.getElementById('confirmModalTime');
     const confirm30Btn = document.getElementById('confirm30Btn');
+    const confirm45Btn = document.getElementById('confirm45Btn');
     const confirm60Btn = document.getElementById('confirm60Btn');
     const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 
@@ -34,10 +35,10 @@
     }
 
     const STATUS_LABELS = {
-        waiting: 'Waiting',
+        waiting_confirm: 'Waiting Confirm',
         confirmed: 'Confirmed',
         in_service: 'In Service',
-        done: 'Done',
+        complete: 'Complete',
         cancelled: 'Cancelled',
     };
 
@@ -86,7 +87,7 @@
                 <td></td>
             `;
             const actionCell = tr.lastElementChild;
-            if (c.status === 'waiting') {
+            if (c.status === 'waiting_confirm') {
                 const confirmBtn = document.createElement('button');
                 confirmBtn.className = 'btn-secondary';
                 confirmBtn.style.cssText = 'width: 100%; padding: 6px 8px; font-size: 12px;';
@@ -215,10 +216,10 @@
             const [h, m] = c.time.split(':').map(Number);
             const span = c.duration_minutes ? Math.ceil(c.duration_minutes / 30) : 1;
             const statusColor = {
-                waiting: '#fbbf24',
+                waiting_confirm: '#fbbf24',
                 confirmed: '#60a5fa',
                 in_service: '#34d399',
-                done: '#a78bfa',
+                complete: '#a78bfa',
                 cancelled: '#ef5350'
             }[c.status] || '#9ca3af';
 
@@ -244,7 +245,7 @@
                 <div style="font-size: 11px; opacity: 0.9;">${c.duration_minutes || '?'} min</div>
             `;
 
-            if (c.status === 'waiting') {
+            if (c.status === 'waiting_confirm') {
                 block.addEventListener('click', () => showConfirmModal(c));
             }
 
@@ -283,6 +284,7 @@
     }
 
     confirm30Btn.addEventListener('click', () => confirmDuration(30));
+    confirm45Btn.addEventListener('click', () => confirmDuration(45));
     confirm60Btn.addEventListener('click', () => confirmDuration(60));
     confirmCancelBtn.addEventListener('click', hideConfirmModal);
     confirmModal.addEventListener('click', (e) => {
