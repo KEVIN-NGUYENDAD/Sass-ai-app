@@ -14,8 +14,10 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 
 # --- Configuration -----------------------------------------------------
-OPEN_HOUR = 9          # salon opens at 9:00 AM
+OPEN_HOUR = 9          # salon opens at 9:30 AM
+OPEN_MINUTE = 30
 CLOSE_HOUR = 19        # salon closes at 7:00 PM (last slot starts 6:30 PM)
+CLOSE_MINUTE = 0
 SLOT_MINUTES = 30      # each check-in slot is 30 minutes
 CHAIRS_PER_SLOT = 3    # how many customers can be seated in the same slot
 MAX_DAYS_AHEAD = 7      # customers can check in for today .. +6 days
@@ -48,8 +50,8 @@ def _save(checkins):
 def generate_slots():
     """Return the list of slot start times for a day, e.g. ['09:00', '09:30', ...]."""
     slots = []
-    start = datetime(2000, 1, 1, OPEN_HOUR, 0)
-    end = datetime(2000, 1, 1, CLOSE_HOUR, 0)
+    start = datetime(2000, 1, 1, OPEN_HOUR, OPEN_MINUTE)
+    end = datetime(2000, 1, 1, CLOSE_HOUR, CLOSE_MINUTE)
     current = start
     while current < end:
         slots.append(current.strftime("%H:%M"))

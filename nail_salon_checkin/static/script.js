@@ -41,28 +41,40 @@
         formError.textContent = '';
     }
 
-    async function loadSlots() {
-        selectedTimeInput.value = '';
-        slotGrid.innerHTML = '<p class="muted">Loading available times&hellip;</p>';
+    let slotsRequestToken = 0;
+
+    async function loadSlots(options) {
+        options = options || {};
+        const isFirstLoad = options.reset !== false && slotGrid.dataset.loaded !== '1';
+        if (isFirstLoad) {
+            selectedTimeInput.value = '';
+            slotGrid.innerHTML = '<p class="muted">Loading available times&hellip;</p>';
+        }
+        const requestToken = ++slotsRequestToken;
         try {
             const res = await fetch(`/api/slots?date=${encodeURIComponent(dateInput.value)}`);
             const data = await res.json();
+            if (requestToken !== slotsRequestToken) return; // a newer request/date change won.
             if (!res.ok) {
                 slotGrid.innerHTML = `<p class="muted">${data.error || 'Unable to load times.'}</p>`;
                 return;
             }
-            renderSlots(data.slots);
+            renderSlots(data.slots, selectedTimeInput.value);
+            slotGrid.dataset.loaded = '1';
         } catch (e) {
-            slotGrid.innerHTML = '<p class="muted">Connection error. Please try again.</p>';
+            if (requestToken !== slotsRequestToken) return;
+            if (isFirstLoad) slotGrid.innerHTML = '<p class="muted">Connection error. Please try again.</p>';
         }
     }
 
-    function renderSlots(slots) {
+    function renderSlots(slots, previouslySelected) {
         if (!slots.length) {
             slotGrid.innerHTML = '<p class="muted">No more slots available for this date.</p>';
+            selectedTimeInput.value = '';
             return;
         }
         slotGrid.innerHTML = '';
+        let stillAvailable = false;
         slots.forEach((slot) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -73,8 +85,23 @@
                 slot.available <= 0 ? 'Full' : slot.available + ' open'
             }</span>`;
             btn.addEventListener('click', () => selectSlot(btn));
+            if (previouslySelected && slot.time === previouslySelected) {
+                if (slot.available > 0) {
+                    btn.classList.add('selected');
+                    stillAvailable = true;
+                }
+            }
             slotGrid.appendChild(btn);
         });
+        if (previouslySelected && !stillAvailable) {
+            selectedTimeInput.value = '';
+        }
+    }
+
+    function startSlotsAutoRefresh() {
+        setInterval(() => {
+            if (!formView.hidden) loadSlots({ reset: false });
+        }, 15000);
     }
 
     function formatTime(t) {
@@ -106,7 +133,10 @@
         });
     });
 
-    dateInput.addEventListener('change', loadSlots);
+    dateInput.addEventListener('change', () => {
+        delete slotGrid.dataset.loaded;
+        loadSlots();
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -160,6 +190,7 @@
         form.reset();
         chips.forEach((c) => c.classList.remove('active'));
         initDateInput();
+        delete slotGrid.dataset.loaded;
         submitBtn.disabled = false;
         submitBtn.textContent = 'Check In';
         confirmView.hidden = true;
@@ -169,4 +200,5 @@
 
     initDateInput();
     loadSlots();
+    startSlotsAutoRefresh();
 })();

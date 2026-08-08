@@ -23,14 +23,17 @@
         cancelled: 'Cancelled',
     };
 
-    async function loadQueue() {
-        queueBody.innerHTML = '<tr><td colspan="6" class="muted">Loading&hellip;</td></tr>';
+    async function loadQueue(options) {
+        const isFirstLoad = !(options && options.silent);
+        if (isFirstLoad) {
+            queueBody.innerHTML = '<tr><td colspan="6" class="muted">Loading&hellip;</td></tr>';
+        }
         try {
             const res = await fetch(`/api/checkins?date=${encodeURIComponent(dateInput.value)}`);
             const data = await res.json();
             renderQueue(data.checkins || []);
         } catch (e) {
-            queueBody.innerHTML = '<tr><td colspan="6" class="muted">Connection error.</td></tr>';
+            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="6" class="muted">Connection error.</td></tr>';
         }
     }
 
@@ -91,4 +94,5 @@
     refreshBtn.addEventListener('click', loadQueue);
 
     loadQueue();
+    setInterval(() => loadQueue({ silent: true }), 10000);
 })();
