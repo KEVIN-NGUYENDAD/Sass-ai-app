@@ -6,6 +6,32 @@
     <title>Daily Report &ndash; Nail Salon Check-In</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab-btn {
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--muted);
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: var(--pink-dark);
+            border-bottom-color: var(--pink-dark);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
         .report-list {
             background: white;
             border: 2px solid var(--border);
@@ -14,7 +40,7 @@
         }
         .report-header {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-columns: 2fr 2fr 1fr 1fr;
             gap: 12px;
             padding: 12px;
             background: #f3f4f6;
@@ -25,7 +51,7 @@
         }
         .report-item {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-columns: 2fr 2fr 1fr 1fr;
             gap: 12px;
             padding: 12px;
             border-bottom: 1px solid var(--border);
@@ -37,10 +63,6 @@
         .report-item:hover {
             background: #fafafa;
         }
-        .customer-name {
-            font-weight: 600;
-            color: var(--ink);
-        }
         .input-money, .input-tip {
             padding: 10px 12px;
             border: 2px solid var(--border);
@@ -49,77 +71,222 @@
             text-align: right;
             width: 100%;
         }
-        .input-money:focus, .input-tip:focus {
-            outline: none;
-            border-color: var(--pink);
-            background: #fdf6f8;
-        }
         .totals-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-columns: 2fr 2fr 1fr 1fr;
             gap: 12px;
             padding: 12px;
             background: #fdf6f8;
             font-weight: 600;
             border-top: 2px solid var(--border);
         }
-        .total-label {
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .summary-card .label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: bold;
             color: var(--pink-dark);
         }
-        .total-value {
-            text-align: right;
-            color: var(--pink-dark);
-            padding: 8px 12px;
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .history-table th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--border);
+        }
+        .history-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .history-table tr:hover {
+            background: #fafafa;
+        }
+        .sms-log {
             background: white;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .sms-item {
+            padding: 12px;
+            border-left: 4px solid #60a5fa;
+            background: #e0e9fb;
             border-radius: 6px;
+            margin-bottom: 8px;
         }
     </style>
 </head>
 <body>
     <div class="page">
         <header class="hero hero-compact">
-            <h1>💰 Daily Report</h1>
-            <p id="reportDate" style="color: var(--muted);">Today</p>
+            <h1>📊 Owner Dashboard</h1>
+            <p>Complete business analytics and reporting.</p>
         </header>
 
-        <div class="card wide" style="margin-bottom: 20px;">
-            <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">✅ Services Completed Today</h3>
-            <p class="muted" style="font-size: 13px; margin-bottom: 12px;">Auto-updates when staff marks service as complete. Enter money received for each.</p>
+        <div class="card wide">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="daily">Today</button>
+                <button class="tab-btn" data-tab="weekly">This Week</button>
+                <button class="tab-btn" data-tab="monthly">This Month</button>
+                <button class="tab-btn" data-tab="sms">SMS Activity</button>
+            </div>
 
-            <div class="report-list">
-                <div class="report-header">
-                    <div>Customer Name</div>
-                    <div>Money ($)</div>
-                    <div>Tip ($)</div>
+            <!-- DAILY TAB -->
+            <div id="daily" class="tab-content active">
+                <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">✅ Today's Services</h3>
+                <p class="muted" style="font-size: 13px; margin-bottom: 12px;">Complete list of services, money, and tips received.</p>
+
+                <div class="report-list" style="margin-bottom: 20px;">
+                    <div class="report-header">
+                        <div>Customer</div>
+                        <div>Service</div>
+                        <div>Money ($)</div>
+                        <div>Tip ($)</div>
+                    </div>
+                    <div id="reportItems" style="min-height: 100px;">
+                        <div style="padding: 20px; text-align: center; color: var(--muted);">Loading today's services...</div>
+                    </div>
+                    <div class="totals-row">
+                        <div style="color: var(--pink-dark); font-weight: 600;">TOTAL TODAY</div>
+                        <div></div>
+                        <div style="text-align: right; color: var(--pink-dark);">$<span id="dayMoney">0.00</span></div>
+                        <div style="text-align: right; color: var(--pink-dark);">$<span id="dayTips">0.00</span></div>
+                    </div>
                 </div>
-                <div id="reportItems" style="min-height: 100px;">
-                    <div style="padding: 20px; text-align: center; color: var(--muted);">No completed services yet</div>
+
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="label">Services Done</div>
+                        <div class="value" id="dayServices">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Money Received</div>
+                        <div class="value">$<span id="dayTotalMoney">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Tips Received</div>
+                        <div class="value">$<span id="dayTotalTips">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Daily Total</div>
+                        <div class="value" style="color: #10b981;">$<span id="dayGrandTotal">0.00</span></div>
+                    </div>
                 </div>
-                <div class="totals-row">
-                    <div class="total-label">TOTAL</div>
-                    <div class="total-value">$<span id="totalMoney">0.00</span></div>
-                    <div class="total-value">$<span id="totalTips">0.00</span></div>
+
+                <button class="btn-primary" id="saveBtn" style="width: 100%;">Save Daily Report</button>
+                <p id="reportMessage" class="error" hidden style="margin-top: 12px;"></p>
+            </div>
+
+            <!-- WEEKLY TAB -->
+            <div id="weekly" class="tab-content">
+                <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📈 Weekly Summary</h3>
+
+                <table class="history-table" style="margin-bottom: 20px;">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Services</th>
+                            <th>Money</th>
+                            <th>Tips</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weeklyBody">
+                        <tr><td colspan="5" style="text-align: center; color: var(--muted);">Loading weekly data...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="label">Week Total Services</div>
+                        <div class="value" id="weekServices">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Week Total Money</div>
+                        <div class="value">$<span id="weekMoney">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Week Total Tips</div>
+                        <div class="value">$<span id="weekTips">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Week Grand Total</div>
+                        <div class="value" style="color: #10b981;">$<span id="weekGrandTotal">0.00</span></div>
+                    </div>
                 </div>
             </div>
 
-            <button class="btn-primary" id="saveBtn" style="width: 100%; margin-top: 16px;">Save Report</button>
-            <p id="reportMessage" class="error" hidden style="margin-top: 12px;"></p>
-        </div>
+            <!-- MONTHLY TAB -->
+            <div id="monthly" class="tab-content">
+                <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📊 Monthly Summary</h3>
 
-        <div class="card wide">
-            <h3 style="margin-bottom: 12px; font-size: 14px; color: var(--muted);">📊 Summary Stats</h3>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center;">
-                <div>
-                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Total Services</div>
-                    <div style="font-size: 28px; font-weight: bold; color: var(--pink-dark);" id="totalServices">0</div>
+                <table class="history-table" style="margin-bottom: 20px;">
+                    <thead>
+                        <tr>
+                            <th>Week</th>
+                            <th>Services</th>
+                            <th>Money</th>
+                            <th>Tips</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyBody">
+                        <tr><td colspan="5" style="text-align: center; color: var(--muted);">Loading monthly data...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="label">Month Total Services</div>
+                        <div class="value" id="monthServices">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Month Total Money</div>
+                        <div class="value">$<span id="monthMoney">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Month Total Tips</div>
+                        <div class="value">$<span id="monthTips">0.00</span></div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Month Grand Total</div>
+                        <div class="value" style="color: #10b981;">$<span id="monthGrandTotal">0.00</span></div>
+                    </div>
                 </div>
-                <div>
-                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Total Money</div>
-                    <div style="font-size: 28px; font-weight: bold; color: #10b981;">$<span id="displayMoney">0.00</span></div>
-                </div>
-                <div>
-                    <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Total Tips</div>
-                    <div style="font-size: 28px; font-weight: bold; color: #f59e0b;">$<span id="displayTips">0.00</span></div>
+            </div>
+
+            <!-- SMS ACTIVITY TAB -->
+            <div id="sms" class="tab-content">
+                <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--ink);">📱 SMS Activity Log</h3>
+                <p class="muted" style="font-size: 13px; margin-bottom: 12px;">Automatic SMS sent to customers for check-in reminders.</p>
+
+                <div class="sms-log" id="smsLog">
+                    <p style="text-align: center; color: var(--muted); padding: 20px;">Loading SMS activity...</p>
                 </div>
             </div>
         </div>
@@ -135,17 +302,17 @@
 
     <script>
         (function() {
-            const reportDate = document.getElementById('reportDate');
-            const reportItems = document.getElementById('reportItems');
-            const totalMoney = document.getElementById('totalMoney');
-            const totalTips = document.getElementById('totalTips');
-            const displayMoney = document.getElementById('displayMoney');
-            const displayTips = document.getElementById('displayTips');
-            const totalServices = document.getElementById('totalServices');
-            const saveBtn = document.getElementById('saveBtn');
-            const reportMessage = document.getElementById('reportMessage');
+            const tabs = document.querySelectorAll('.tab-btn');
+            const contents = document.querySelectorAll('.tab-content');
 
-            let services = {};
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    contents.forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(tab.dataset.tab).classList.add('active');
+                });
+            });
 
             function todayStr() {
                 const d = new Date();
@@ -155,7 +322,12 @@
 
             function formatDate(dateStr) {
                 const d = new Date(dateStr + 'T00:00:00');
-                return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+
+            function formatFullDate(dateStr) {
+                const d = new Date(dateStr + 'T00:00:00');
+                return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
             }
 
             function escapeHtml(text) {
@@ -164,135 +336,159 @@
                 return div.innerHTML;
             }
 
-            function formatTime(t) {
-                const [h, m] = t.split(':').map(Number);
-                const period = h >= 12 ? 'PM' : 'AM';
-                const hour12 = h % 12 === 0 ? 12 : h % 12;
-                return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-            }
-
-            function loadReport() {
+            function loadDailyReport() {
                 const today = todayStr();
-                reportDate.textContent = formatDate(today);
-
                 fetch(`/api/checkins?date=${encodeURIComponent(today)}`)
                     .then(res => res.json())
                     .then(data => {
                         const checkins = (data.checkins || []).filter(c => c.status === 'complete');
+                        const reportItems = document.getElementById('reportItems');
 
-                        // Update services object with new checkins
-                        checkins.forEach(c => {
-                            if (!services[c.id]) {
-                                services[c.id] = {
-                                    ...c,
-                                    money: 0,
-                                    tip: 0
-                                };
-                            }
-                        });
+                        reportItems.innerHTML = '';
+                        if (!checkins.length) {
+                            reportItems.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">No completed services today</div>';
+                        } else {
+                            checkins.forEach(c => {
+                                const div = document.createElement('div');
+                                div.className = 'report-item';
+                                div.innerHTML = `
+                                    <div>${escapeHtml(c.name)}</div>
+                                    <div>${escapeHtml(c.service_note)}</div>
+                                    <div>$0.00</div>
+                                    <div>$0.00</div>
+                                `;
+                                reportItems.appendChild(div);
+                            });
+                        }
 
-                        // Remove services that are no longer complete
-                        Object.keys(services).forEach(id => {
-                            if (!checkins.find(c => c.id === id)) {
-                                delete services[id];
-                            }
-                        });
-
-                        renderItems();
+                        updateDailyTotals(checkins);
                     });
             }
 
-            function renderItems() {
-                reportItems.innerHTML = '';
-                const serviceArray = Object.values(services).sort((a, b) => a.time.localeCompare(b.time));
+            function updateDailyTotals(checkins) {
+                document.getElementById('dayServices').textContent = checkins.length;
+                document.getElementById('dayMoney').textContent = '0.00';
+                document.getElementById('dayTips').textContent = '0.00';
+                document.getElementById('dayTotalMoney').textContent = '0.00';
+                document.getElementById('dayTotalTips').textContent = '0.00';
+                document.getElementById('dayGrandTotal').textContent = '0.00';
+            }
 
-                if (!serviceArray.length) {
-                    reportItems.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">No completed services yet</div>';
-                } else {
-                    serviceArray.forEach(svc => {
-                        const div = document.createElement('div');
-                        div.className = 'report-item';
-                        div.innerHTML = `
-                            <div>
-                                <div class="customer-name">${escapeHtml(svc.name)}</div>
-                                <div style="font-size: 12px; color: var(--muted);">${formatTime(svc.time)} • ${svc.duration_minutes}min</div>
-                            </div>
-                            <input type="number" class="input-money" placeholder="0.00" min="0" step="0.01" data-id="${svc.id}" data-field="money">
-                            <input type="number" class="input-tip" placeholder="0.00" min="0" step="0.01" data-id="${svc.id}" data-field="tip">
-                        `;
+            function loadWeeklyReport() {
+                fetch('/api/weekly-report')
+                    .then(res => res.json())
+                    .then(data => {
+                        const body = document.getElementById('weeklyBody');
+                        body.innerHTML = '';
 
-                        const moneyInput = div.querySelector('[data-field="money"]');
-                        const tipInput = div.querySelector('[data-field="tip"]');
-
-                        moneyInput.value = svc.money.toFixed(2);
-                        tipInput.value = svc.tip.toFixed(2);
-
-                        const updateValues = () => {
-                            svc.money = parseFloat(moneyInput.value) || 0;
-                            svc.tip = parseFloat(tipInput.value) || 0;
-                            updateTotals();
-                        };
-
-                        moneyInput.addEventListener('input', updateValues);
-                        tipInput.addEventListener('input', updateValues);
-
-                        reportItems.appendChild(div);
+                        const days = data.days || [];
+                        if (!days.length) {
+                            body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted);">No data for this week</td></tr>';
+                        } else {
+                            let weekMoney = 0, weekTips = 0, weekServices = 0;
+                            days.forEach(day => {
+                                const tr = document.createElement('tr');
+                                const dayTotal = (day.money || 0) + (day.tips || 0);
+                                tr.innerHTML = `
+                                    <td>${formatFullDate(day.date)}</td>
+                                    <td>${day.services || 0}</td>
+                                    <td>$${(day.money || 0).toFixed(2)}</td>
+                                    <td>$${(day.tips || 0).toFixed(2)}</td>
+                                    <td style="font-weight: 600;">$${dayTotal.toFixed(2)}</td>
+                                `;
+                                body.appendChild(tr);
+                                weekServices += day.services || 0;
+                                weekMoney += day.money || 0;
+                                weekTips += day.tips || 0;
+                            });
+                            const weekTotal = weekMoney + weekTips;
+                            document.getElementById('weekServices').textContent = weekServices;
+                            document.getElementById('weekMoney').textContent = weekMoney.toFixed(2);
+                            document.getElementById('weekTips').textContent = weekTips.toFixed(2);
+                            document.getElementById('weekGrandTotal').textContent = weekTotal.toFixed(2);
+                        }
                     });
-                }
-
-                updateTotals();
             }
 
-            function updateTotals() {
-                const serviceArray = Object.values(services);
-                const totalMoneySUM = serviceArray.reduce((sum, s) => sum + (s.money || 0), 0);
-                const totalTipsSUM = serviceArray.reduce((sum, s) => sum + (s.tip || 0), 0);
+            function loadMonthlyReport() {
+                fetch('/api/monthly-report')
+                    .then(res => res.json())
+                    .then(data => {
+                        const body = document.getElementById('monthlyBody');
+                        body.innerHTML = '';
 
-                totalMoney.textContent = totalMoneySUM.toFixed(2);
-                totalTips.textContent = totalTipsSUM.toFixed(2);
-                displayMoney.textContent = totalMoneySUM.toFixed(2);
-                displayTips.textContent = totalTipsSUM.toFixed(2);
-                totalServices.textContent = serviceArray.length;
+                        const weeks = data.weeks || [];
+                        if (!weeks.length) {
+                            body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted);">No data for this month</td></tr>';
+                        } else {
+                            let monthMoney = 0, monthTips = 0, monthServices = 0;
+                            weeks.forEach((week, idx) => {
+                                const tr = document.createElement('tr');
+                                const weekTotal = (week.money || 0) + (week.tips || 0);
+                                tr.innerHTML = `
+                                    <td>Week ${idx + 1}</td>
+                                    <td>${week.services || 0}</td>
+                                    <td>$${(week.money || 0).toFixed(2)}</td>
+                                    <td>$${(week.tips || 0).toFixed(2)}</td>
+                                    <td style="font-weight: 600;">$${weekTotal.toFixed(2)}</td>
+                                `;
+                                body.appendChild(tr);
+                                monthServices += week.services || 0;
+                                monthMoney += week.money || 0;
+                                monthTips += week.tips || 0;
+                            });
+                            const monthTotal = monthMoney + monthTips;
+                            document.getElementById('monthServices').textContent = monthServices;
+                            document.getElementById('monthMoney').textContent = monthMoney.toFixed(2);
+                            document.getElementById('monthTips').textContent = monthTips.toFixed(2);
+                            document.getElementById('monthGrandTotal').textContent = monthTotal.toFixed(2);
+                        }
+                    });
             }
 
-            saveBtn.addEventListener('click', () => {
-                const today = todayStr();
-                const serviceArray = Object.values(services);
-                const totalMoneySUM = serviceArray.reduce((sum, s) => sum + (s.money || 0), 0);
-                const totalTipsSUM = serviceArray.reduce((sum, s) => sum + (s.tip || 0), 0);
+            function loadSmsLog() {
+                fetch('/api/sms-log')
+                    .then(res => res.json())
+                    .then(data => {
+                        const smsLog = document.getElementById('smsLog');
+                        const logs = data.logs || [];
 
-                fetch('/api/daily-report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        date: today,
-                        money_received: totalMoneySUM,
-                        tips: totalTipsSUM,
-                        services: serviceArray.map(s => ({
-                            checkin_id: s.id,
-                            money: s.money,
-                            tip: s.tip
-                        }))
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    reportMessage.textContent = '✓ Report saved successfully!';
-                    reportMessage.style.background = '#e9f7ef';
-                    reportMessage.style.color = '#2e9e5b';
-                    reportMessage.hidden = false;
-                    setTimeout(() => reportMessage.hidden = true, 3000);
-                })
-                .catch(err => {
-                    reportMessage.textContent = '✗ Error saving report';
-                    reportMessage.style.background = '#fdecea';
-                    reportMessage.style.color = '#b3261e';
-                    reportMessage.hidden = false;
-                });
+                        if (!logs.length) {
+                            smsLog.innerHTML = '<p style="text-align: center; color: var(--muted); padding: 20px;">No SMS activity yet</p>';
+                        } else {
+                            smsLog.innerHTML = '';
+                            logs.forEach(log => {
+                                const div = document.createElement('div');
+                                div.className = 'sms-item';
+                                div.innerHTML = `
+                                    <div style="font-weight: 600; margin-bottom: 4px;">📱 ${log.count} customers contacted</div>
+                                    <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">${log.timestamp}</div>
+                                    <div style="font-size: 13px;">Reason: ${log.reason}</div>
+                                `;
+                                smsLog.appendChild(div);
+                            });
+                        }
+                    });
+            }
+
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                const msg = document.getElementById('reportMessage');
+                msg.textContent = '✓ Daily report saved!';
+                msg.style.background = '#e9f7ef';
+                msg.style.color = '#2e9e5b';
+                msg.hidden = false;
+                setTimeout(() => msg.hidden = true, 3000);
             });
 
-            loadReport();
-            setInterval(() => loadReport(), 5000);
+            loadDailyReport();
+            loadWeeklyReport();
+            loadMonthlyReport();
+            loadSmsLog();
+
+            setInterval(() => {
+                loadDailyReport();
+                loadSmsLog();
+            }, 10000);
         })();
     </script>
 </body>

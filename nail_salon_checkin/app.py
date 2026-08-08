@@ -106,7 +106,12 @@ def _load():
         return []
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         try:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict) and "checkins" in data:
+                return data["checkins"]
+            return []
         except json.JSONDecodeError:
             return []
 
@@ -115,6 +120,29 @@ def _save(checkins):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(checkins, f, indent=2)
+
+
+def _load_data():
+    """Load complete data structure with checkins, reports, sms_log, etc."""
+    if not os.path.exists(DATA_FILE):
+        return {"checkins": [], "reports": {}, "sms_log": []}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        try:
+            data = json.load(f)
+            if isinstance(data, list):
+                return {"checkins": data, "reports": {}, "sms_log": []}
+            if isinstance(data, dict):
+                return data
+            return {"checkins": [], "reports": {}, "sms_log": []}
+        except json.JSONDecodeError:
+            return {"checkins": [], "reports": {}, "sms_log": []}
+
+
+def _save_data(data):
+    """Save complete data structure."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 
 def generate_slots():
@@ -205,7 +233,8 @@ def api_slots():
         return jsonify({"error": "Invalid or out-of-range date"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
 
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
@@ -251,7 +280,8 @@ def api_checkin():
         return jsonify({"error": "Please add a note about the service you'd like"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
 
         booked = slot_occupancy(checkins, date_str).get(time_str, 0)
         if booked >= CHAIRS_PER_SLOT:
@@ -272,7 +302,8 @@ def api_checkin():
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
         checkins.append(record)
-        _save(checkins)
+        full_data["checkins"] = checkins
+        _save_data(full_data)
 
     confirm_url = f"{get_base_url()}/owner/confirm/{record['id']}?token={record['confirm_token']}"
     send_sms(
@@ -292,7 +323,8 @@ def api_checkin():
 def api_checkins():
     date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
     with _lock:
-        checkins = _load()
+        data = _load_data()
+        checkins = data.get("checkins", [])
     day_checkins = [c for c in checkins if c["date"] == date_str]
     day_checkins.sort(key=lambda c: (c["time"], c["created_at"]))
     return jsonify({"date": date_str, "checkins": day_checkins})
@@ -306,11 +338,13 @@ def api_update_status(checkin_id):
         return jsonify({"error": "Invalid status"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
         for c in checkins:
             if c["id"] == checkin_id:
                 c["status"] = new_status
-                _save(checkins)
+                full_data["checkins"] = checkins
+                _save_data(full_data)
                 return jsonify({"checkin": c})
 
     return jsonify({"error": "Check-in not found"}), 404
@@ -327,7 +361,8 @@ def api_confirm_duration(checkin_id):
         return jsonify({"error": "Invalid duration"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
         checkin = next((c for c in checkins if c["id"] == checkin_id), None)
         if not checkin:
             return jsonify({"error": "Check-in not found"}), 404
@@ -335,7 +370,8 @@ def api_confirm_duration(checkin_id):
         checkin["duration_minutes"] = duration
         checkin["confirmed"] = True
         checkin["status"] = "confirmed"
-        _save(checkins)
+        full_data["checkins"] = checkins
+        _save_data(full_data)
 
     send_sms(
         checkin.get("phone"),
@@ -351,7 +387,8 @@ def api_confirm_duration(checkin_id):
 def owner_confirm_page(checkin_id):
     token = request.args.get("token", "")
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
     checkin = next((c for c in checkins if c["id"] == checkin_id), None)
     if not checkin or not token or token != checkin.get("confirm_token"):
         return render_template("owner_confirm.html", error="This confirmation link is invalid or expired."), 404
@@ -376,14 +413,16 @@ def api_owner_confirm(checkin_id):
         return jsonify({"error": "Invalid duration"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
         checkin = next((c for c in checkins if c["id"] == checkin_id), None)
         if not checkin or not token or token != checkin.get("confirm_token"):
             return jsonify({"error": "Invalid confirmation link"}), 404
 
         checkin["duration_minutes"] = duration
         checkin["confirmed"] = True
-        _save(checkins)
+        full_data["checkins"] = checkins
+        _save_data(full_data)
 
     send_sms(
         checkin.get("phone"),
@@ -420,7 +459,8 @@ def api_checkin_by_staff():
         return jsonify({"error": "Duration must be 30 or 60 minutes"}), 400
 
     with _lock:
-        checkins = _load()
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
         booked = slot_occupancy(checkins, date_str).get(time_str, 0)
         if booked >= CHAIRS_PER_SLOT:
             return jsonify({"error": "That time slot is full"}), 409
@@ -439,7 +479,8 @@ def api_checkin_by_staff():
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
         checkins.append(record)
-        _save(checkins)
+        full_data["checkins"] = checkins
+        _save_data(full_data)
 
     send_sms(
         phone,
@@ -604,8 +645,136 @@ def send_bulk_sms():
             send_sms(phone, message)
             sent_count += 1
 
+    if sent_count > 0:
+        with _lock:
+            try:
+                data = _load_data()
+                if "sms_log" not in data:
+                    data["sms_log"] = []
+                data["sms_log"].append({
+                    "count": sent_count,
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "reason": "Auto-send to 2+ week customers"
+                })
+                _save_data(data)
+            except Exception as e:
+                logger.exception("Failed to log SMS event")
+
     logger.info("Sent bulk SMS to %d customers", sent_count)
     return jsonify({"message": f"SMS sent to {sent_count} customers", "count": sent_count})
+
+
+@app.route("/api/weekly-report")
+def get_weekly_report():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        with _lock:
+            data = _load_data()
+        checkins = data.get("checkins", [])
+        reports = data.get("reports", {})
+    except Exception:
+        return jsonify({"days": []})
+
+    now = datetime.now()
+    today = now.date()
+    days_data = []
+
+    for i in range(7):
+        day = today - timedelta(days=6-i)
+        day_str = day.strftime("%Y-%m-%d")
+
+        day_checkins = [c for c in checkins if c.get("date") == day_str and c.get("status") == "complete"]
+        service_count = len(day_checkins)
+
+        report = reports.get(day_str, {})
+        money = float(report.get("money_received", 0))
+        tips = float(report.get("tips", 0))
+
+        days_data.append({
+            "date": day_str,
+            "services": service_count,
+            "money": money,
+            "tips": tips,
+            "total": money + tips
+        })
+
+    return jsonify({"days": days_data})
+
+
+@app.route("/api/monthly-report")
+def get_monthly_report():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        with _lock:
+            data = _load_data()
+        checkins = data.get("checkins", [])
+        reports = data.get("reports", {})
+    except Exception:
+        return jsonify({"weeks": []})
+
+    now = datetime.now()
+    today = now.date()
+    year = today.year
+    month = today.month
+
+    first_day = datetime(year, month, 1).date()
+    last_day = (datetime(year, month + 1, 1) - timedelta(days=1)).date() if month < 12 else datetime(year + 1, 1, 1).date() - timedelta(days=1)
+
+    weeks_data = []
+    current_date = first_day
+
+    week_num = 1
+    while current_date <= last_day:
+        week_end = current_date + timedelta(days=6)
+        if week_end > last_day:
+            week_end = last_day
+
+        week_checkins = []
+        week_money = 0.0
+        week_tips = 0.0
+
+        for date_offset in range((week_end - current_date).days + 1):
+            check_date = current_date + timedelta(days=date_offset)
+            check_date_str = check_date.strftime("%Y-%m-%d")
+
+            day_checkins = [c for c in checkins if c.get("date") == check_date_str and c.get("status") == "complete"]
+            week_checkins.extend(day_checkins)
+
+            report = reports.get(check_date_str, {})
+            week_money += float(report.get("money_received", 0))
+            week_tips += float(report.get("tips", 0))
+
+        weeks_data.append({
+            "week": week_num,
+            "services": len(week_checkins),
+            "money": week_money,
+            "tips": week_tips,
+            "total": week_money + week_tips
+        })
+
+        current_date = week_end + timedelta(days=1)
+        week_num += 1
+
+    return jsonify({"weeks": weeks_data})
+
+
+@app.route("/api/sms-log")
+def get_sms_log():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        with _lock:
+            data = _load_data()
+        sms_log = data.get("sms_log", [])
+    except Exception:
+        return jsonify({"logs": []})
+
+    return jsonify({"logs": sms_log})
 
 
 @app.route("/health")
