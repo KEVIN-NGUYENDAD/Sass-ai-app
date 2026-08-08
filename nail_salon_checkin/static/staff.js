@@ -45,7 +45,7 @@
     async function loadQueue(options) {
         const isFirstLoad = !(options && options.silent);
         if (isFirstLoad) {
-            queueBody.innerHTML = '<tr><td colspan="8" class="muted">Loading&hellip;</td></tr>';
+            queueBody.innerHTML = '<tr><td colspan="7" class="muted">Loading&hellip;</td></tr>';
         }
         try {
             const res = await fetch(`/api/checkins?date=${encodeURIComponent(dateInput.value)}`);
@@ -53,7 +53,7 @@
             renderQueue(data.checkins || []);
             updateStats(data.checkins || []);
         } catch (e) {
-            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="8" class="muted">Connection error.</td></tr>';
+            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="7" class="muted">Connection error.</td></tr>';
         }
     }
 
@@ -68,7 +68,7 @@
 
     function renderQueue(checkins) {
         if (!checkins.length) {
-            queueBody.innerHTML = '<tr><td colspan="8" class="muted">No check-ins for this date yet.</td></tr>';
+            queueBody.innerHTML = '<tr><td colspan="7" class="muted">No check-ins for this date yet.</td></tr>';
             return;
         }
         queueBody.innerHTML = '';
@@ -77,14 +77,10 @@
             const durationLabel = c.duration_minutes
                 ? `${c.duration_minutes} min`
                 : '<span class="muted">Pending owner confirm</span>';
-            const photoCell = c.photo_url
-                ? `<img src="${c.photo_url}" style="max-width: 50px; max-height: 50px; border-radius: 4px; cursor: pointer;" onclick="window.open('${c.photo_url}', '_blank')" title="Click to view full size">`
-                : '<span class="muted">—</span>';
             tr.innerHTML = `
                 <td>${formatTime(c.time)}</td>
                 <td>${escapeHtml(c.name)}</td>
                 <td>${escapeHtml(c.phone || '—')}</td>
-                <td>${photoCell}</td>
                 <td>${escapeHtml(c.service_note)}</td>
                 <td>${durationLabel}</td>
                 <td><span class="status-badge status-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>

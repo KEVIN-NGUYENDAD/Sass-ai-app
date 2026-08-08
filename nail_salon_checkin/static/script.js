@@ -7,9 +7,6 @@
     const submitBtn = document.getElementById('submitBtn');
     const serviceNote = document.getElementById('serviceNote');
     const chips = document.querySelectorAll('.chip');
-    const photoUpload = document.getElementById('photoUpload');
-    const photoPreview = document.getElementById('photoPreview');
-    const previewImage = document.getElementById('previewImage');
 
     const formView = document.getElementById('formView');
     const confirmView = document.getElementById('confirmView');
@@ -120,22 +117,6 @@
         selectedTimeInput.value = btn.dataset.time;
     }
 
-    photoUpload.addEventListener('change', () => {
-        const file = photoUpload.files[0];
-        if (file && file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImage.src = e.target.result;
-                photoPreview.style.display = 'block';
-            };
-            reader.readAsDataURL(file);
-        } else if (file) {
-            showError('Please select an image file.');
-            photoUpload.value = '';
-            photoPreview.style.display = 'none';
-        }
-    });
-
     chips.forEach((chip) => {
         chip.addEventListener('click', () => {
             const service = chip.dataset.service;
@@ -175,19 +156,10 @@
         submitBtn.textContent = 'Checking in…';
 
         try {
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('phone', phone);
-            formData.append('date', date);
-            formData.append('time', time);
-            formData.append('service_note', note);
-            if (photoUpload.files.length > 0) {
-                formData.append('photo', photoUpload.files[0]);
-            }
-
             const res = await fetch('/api/checkin', {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, phone, date, time, service_note: note }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -217,7 +189,6 @@
     newCheckinBtn.addEventListener('click', () => {
         form.reset();
         chips.forEach((c) => c.classList.remove('active'));
-        photoPreview.style.display = 'none';
         initDateInput();
         delete slotGrid.dataset.loaded;
         submitBtn.disabled = false;
