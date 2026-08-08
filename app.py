@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__, static_folder='.', template_folder='.')
 
-HTML_CHATBOX = """<!DOCTYPE html>
+HTML_CHATBOX = r"""<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
