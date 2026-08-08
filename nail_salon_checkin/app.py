@@ -225,6 +225,13 @@ def staff_page():
     return render_template("staff.html")
 
 
+@app.route("/customer-management")
+def customer_management_page():
+    if not session.get("staff_authenticated"):
+        return redirect("/staff-login")
+    return render_template("customer_management.html")
+
+
 # --- Routes: API -----------------------------------------------------------
 @app.route("/api/slots")
 def api_slots():
@@ -269,6 +276,7 @@ def api_checkin():
     date_str = (data.get("date") or "").strip()
     time_str = (data.get("time") or "").strip()
     service_note = (data.get("service_note") or "").strip()
+    nickname = (data.get("nickname") or "").strip()
 
     if not name:
         return jsonify({"error": "Name is required"}), 400
@@ -292,6 +300,7 @@ def api_checkin():
             "id": uuid.uuid4().hex[:8],
             "name": name,
             "phone": phone,
+            "nickname": nickname,
             "date": date_str,
             "time": time_str,
             "service_note": service_note,
@@ -300,6 +309,7 @@ def api_checkin():
             "confirmed": False,
             "confirm_token": uuid.uuid4().hex,
             "created_at": datetime.now().isoformat(timespec="seconds"),
+            "note": "",
         }
         checkins.append(record)
         full_data["checkins"] = checkins
@@ -775,6 +785,223 @@ def get_sms_log():
         return jsonify({"logs": []})
 
     return jsonify({"logs": sms_log})
+
+
+@app.route("/api/customers")
+def get_customers():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    with _lock:
+        data = _load_data()
+        checkins = data.get("checkins", [])
+
+    customer_map = {}
+    for c in checkins:
+        if c.get("status") == "cancelled":
+            continue
+        phone = c.get("phone") or "unknown"
+        if phone not in customer_map:
+            customer_map[phone] = {
+                "phone": phone,
+                "name": c.get("name", ""),
+                "nickname": c.get("nickname", ""),
+                "note": c.get("note", ""),
+                "visit_count": 0,
+                "last_visit": "",
+                "total_spent": 0,
+            }
+        customer_map[phone]["visit_count"] += 1
+        if c.get("status") == "complete":
+            customer_map[phone]["last_visit"] = c.get("date", "")
+
+    customers = list(customer_map.values())
+    customers.sort(key=lambda x: x.get("last_visit", "") or "", reverse=True)
+    return jsonify({"customers": customers})
+
+
+@app.route("/api/customers/<phone>/update", methods=["POST"])
+def update_customer(phone):
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    nickname = (data.get("nickname") or "").strip()
+    note = (data.get("note") or "").strip()
+
+    with _lock:
+        full_data = _load_data()
+        checkins = full_data.get("checkins", [])
+
+        for c in checkins:
+            if c.get("phone") == phone:
+                c["nickname"] = nickname
+                c["note"] = note
+
+        full_data["checkins"] = checkins
+        _save_data(full_data)
+
+    return jsonify({"success": True})
+
+
+def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
+    """Generate CSV report as string."""
+    lines = []
+
+    if date_type == "day":
+        day_checkins = [c for c in checkins if c.get("date") == date_str and c.get("status") == "complete"]
+        lines.append("BÁO CÁO HÀNG NGÀY - Daily Report")
+        lines.append(f"Date,{date_str}")
+        lines.append("")
+        lines.append("Customer,Phone,Nickname,Service,Tips,Status")
+        for c in day_checkins:
+            report = reports.get(c.get("date", ""), {})
+            tip = report.get("tips", 0)
+            lines.append(f"{c.get('name', '')},{c.get('phone', '')},{c.get('nickname', '')},{c.get('service_note', '')},{tip},Done")
+        report = reports.get(date_str, {})
+        money = float(report.get("money_received", 0))
+        tips = float(report.get("tips", 0))
+        lines.append("")
+        lines.append(f"Total Services,{len(day_checkins)}")
+        lines.append(f"Total Money,{money}")
+        lines.append(f"Total Tips,{tips}")
+        lines.append(f"Total,{money + tips}")
+
+    elif date_type == "week":
+        now = datetime.now()
+        today = now.date()
+        lines.append("BÁO CÁO TUẦN - Weekly Report")
+        lines.append(f"Week Ending,{today.strftime('%Y-%m-%d')}")
+        lines.append("")
+        lines.append("Date,Services,Money,Tips,Total")
+        week_total_money = 0
+        week_total_tips = 0
+        for i in range(7):
+            day = today - timedelta(days=6-i)
+            day_str = day.strftime("%Y-%m-%d")
+            day_checkins = [c for c in checkins if c.get("date") == day_str and c.get("status") == "complete"]
+            report = reports.get(day_str, {})
+            money = float(report.get("money_received", 0))
+            tips = float(report.get("tips", 0))
+            week_total_money += money
+            week_total_tips += tips
+            lines.append(f"{day_str},{len(day_checkins)},{money},{tips},{money + tips}")
+        lines.append("")
+        lines.append(f"Weekly Total,{week_total_money + week_total_tips}")
+
+    elif date_type == "month":
+        now = datetime.now()
+        lines.append("BÁO CÁO THÁNG - Monthly Report")
+        lines.append(f"Month,{now.strftime('%B %Y')}")
+        lines.append("")
+        lines.append("Week,Services,Money,Tips,Total")
+        month_total_money = 0
+        month_total_tips = 0
+
+        current_date = datetime(now.year, now.month, 1)
+        week_num = 1
+        while current_date.month == now.month:
+            week_end = min(current_date + timedelta(days=6), current_date.replace(day=1) + timedelta(days=32) - timedelta(days=1))
+            week_checkins = [c for c in checkins if current_date.date() <= datetime.strptime(c.get("date", ""), "%Y-%m-%d").date() <= week_end.date() and c.get("status") == "complete"]
+            week_money = 0
+            week_tips = 0
+            for check_date_str in set(c.get("date") for c in week_checkins):
+                report = reports.get(check_date_str, {})
+                week_money += float(report.get("money_received", 0))
+                week_tips += float(report.get("tips", 0))
+            month_total_money += week_money
+            month_total_tips += week_tips
+            lines.append(f"Week {week_num},{len(week_checkins)},{week_money},{week_tips},{week_money + week_tips}")
+            current_date = week_end + timedelta(days=1)
+            week_num += 1
+
+        lines.append("")
+        lines.append(f"Monthly Total,{month_total_money + month_total_tips}")
+
+    return "\n".join(lines)
+
+
+@app.route("/api/export/daily-summary")
+def export_daily_summary():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+
+    with _lock:
+        data = _load_data()
+        checkins = data.get("checkins", [])
+        reports = data.get("reports", {})
+
+    csv_content = _generate_csv_report(checkins, reports, "day", date_str)
+
+    return csv_content, 200, {
+        "Content-Type": "text/csv",
+        "Content-Disposition": f'attachment; filename="daily-report-{date_str}.csv"'
+    }
+
+
+@app.route("/api/export/weekly-summary")
+def export_weekly_summary():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    with _lock:
+        data = _load_data()
+        checkins = data.get("checkins", [])
+        reports = data.get("reports", {})
+
+    csv_content = _generate_csv_report(checkins, reports, "week")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    return csv_content, 200, {
+        "Content-Type": "text/csv",
+        "Content-Disposition": f'attachment; filename="weekly-report-{today}.csv"'
+    }
+
+
+@app.route("/api/export/monthly-summary")
+def export_monthly_summary():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    with _lock:
+        data = _load_data()
+        checkins = data.get("checkins", [])
+        reports = data.get("reports", {})
+
+    csv_content = _generate_csv_report(checkins, reports, "month")
+
+    today = datetime.now().strftime("%Y-%m")
+    return csv_content, 200, {
+        "Content-Type": "text/csv",
+        "Content-Disposition": f'attachment; filename="monthly-report-{today}.csv"'
+    }
+
+
+@app.route("/api/send-summary-sms", methods=["POST"])
+def send_summary_sms():
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    report_type = data.get("type", "day")  # day, week, month
+
+    date_str = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+
+    base_url = get_base_url()
+    if report_type == "day":
+        link = f"{base_url}/api/export/daily-summary?date={date_str}"
+        text = f"Báo cáo hàng ngày {date_str}: {link}"
+    elif report_type == "week":
+        link = f"{base_url}/api/export/weekly-summary"
+        text = f"Báo cáo tuần: {link}"
+    else:
+        link = f"{base_url}/api/export/monthly-summary"
+        text = f"Báo cáo tháng: {link}"
+
+    send_sms(OWNER_PHONE, text)
+    return jsonify({"success": True, "message": "Report sent via SMS"})
 
 
 @app.route("/health")

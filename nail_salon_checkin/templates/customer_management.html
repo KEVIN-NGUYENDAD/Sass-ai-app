@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management – Nail Salon Check-In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="hero hero-compact">
+            <h1>👥 Customer Management</h1>
+            <p>Edit customer nicknames and notes.</p>
+        </header>
+
+        <main class="card wide">
+            <div class="staff-toolbar">
+                <input type="text" id="searchInput" placeholder="Search by name or phone...">
+                <button class="btn-secondary" id="refreshBtn">Refresh</button>
+            </div>
+
+            <table class="queue-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Nickname</th>
+                        <th>Note</th>
+                        <th>Visits</th>
+                        <th>Last Visit</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="customerBody">
+                    <tr><td colspan="7" class="muted">Loading&hellip;</td></tr>
+                </tbody>
+            </table>
+        </main>
+
+        <footer class="footer">
+            <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+                <a href="/staff">&larr; Staff Queue</a>
+                <span style="color: var(--border);">·</span>
+                <a href="/daily-report">💰 Daily Report</a>
+            </div>
+        </footer>
+    </div>
+
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; pointer-events: none;">
+        <div class="card" style="max-width: 400px; margin: auto;">
+            <h2 style="margin-bottom: 16px;">Edit Customer</h2>
+            <p id="editName" style="font-weight: 600; margin-bottom: 16px;"></p>
+            <div class="field">
+                <label>Nickname</label>
+                <input type="text" id="editNickname" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit;">
+            </div>
+            <div class="field">
+                <label>Note</label>
+                <textarea id="editNote" rows="3" style="width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit;"></textarea>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;">
+                <button class="btn-primary" id="editSaveBtn" style="flex: 1;">Save</button>
+                <button class="btn-secondary" id="editCancelBtn" style="flex: 1;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allCustomers = [];
+        let editingPhone = null;
+
+        const customerBody = document.getElementById('customerBody');
+        const searchInput = document.getElementById('searchInput');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const editModal = document.getElementById('editModal');
+        const editName = document.getElementById('editName');
+        const editNickname = document.getElementById('editNickname');
+        const editNote = document.getElementById('editNote');
+        const editSaveBtn = document.getElementById('editSaveBtn');
+        const editCancelBtn = document.getElementById('editCancelBtn');
+
+        async function loadCustomers() {
+            try {
+                const res = await fetch('/api/customers');
+                if (!res.ok) {
+                    customerBody.innerHTML = '<tr><td colspan="7" class="muted">Failed to load customers.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                allCustomers = data.customers || [];
+                renderCustomers(allCustomers);
+            } catch (e) {
+                customerBody.innerHTML = '<tr><td colspan="7" class="muted">Connection error.</td></tr>';
+            }
+        }
+
+        function renderCustomers(customers) {
+            if (!customers.length) {
+                customerBody.innerHTML = '<tr><td colspan="7" class="muted">No customers yet.</td></tr>';
+                return;
+            }
+            customerBody.innerHTML = '';
+            customers.forEach((c) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(c.name)}</td>
+                    <td>${escapeHtml(c.phone)}</td>
+                    <td>${escapeHtml(c.nickname)}</td>
+                    <td>${escapeHtml(c.note)}</td>
+                    <td>${c.visit_count}</td>
+                    <td>${c.last_visit}</td>
+                    <td></td>
+                `;
+                const actionCell = tr.lastElementChild;
+                const btn = document.createElement('button');
+                btn.className = 'btn-secondary';
+                btn.style.cssText = 'width: 100%; padding: 6px 8px; font-size: 12px;';
+                btn.textContent = 'Edit';
+                btn.addEventListener('click', () => showEditModal(c));
+                actionCell.appendChild(btn);
+                customerBody.appendChild(tr);
+            });
+        }
+
+        function showEditModal(customer) {
+            editingPhone = customer.phone;
+            editName.textContent = customer.name;
+            editNickname.value = customer.nickname;
+            editNote.value = customer.note;
+            editModal.style.cssText = 'display: flex !important; pointer-events: auto !important;';
+        }
+
+        function hideEditModal() {
+            editModal.style.cssText = 'display: none !important; pointer-events: none !important;';
+            editingPhone = null;
+        }
+
+        async function saveCustomer() {
+            if (!editingPhone) return;
+            const nickname = editNickname.value.trim();
+            const note = editNote.value.trim();
+
+            try {
+                const res = await fetch(`/api/customers/${encodeURIComponent(editingPhone)}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nickname, note }),
+                });
+                if (res.ok) {
+                    hideEditModal();
+                    loadCustomers();
+                }
+            } catch (e) {
+                console.error('Save failed:', e);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase();
+            const filtered = allCustomers.filter(c =>
+                c.name.toLowerCase().includes(query) ||
+                c.phone.toLowerCase().includes(query) ||
+                c.nickname.toLowerCase().includes(query)
+            );
+            renderCustomers(filtered);
+        });
+
+        refreshBtn.addEventListener('click', loadCustomers);
+        editSaveBtn.addEventListener('click', saveCustomer);
+        editCancelBtn.addEventListener('click', hideEditModal);
+        editModal.addEventListener('click', (e) => {
+            if (e.target === editModal) hideEditModal();
+        });
+
+        loadCustomers();
+    </script>
+</body>
+</html>
