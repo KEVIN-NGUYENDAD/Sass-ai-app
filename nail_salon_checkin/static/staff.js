@@ -256,11 +256,11 @@
         pendingConfirmCheckinId = checkin.id;
         confirmModalName.textContent = checkin.name;
         confirmModalTime.textContent = `${checkin.date} at ${formatTime(checkin.time)}`;
-        confirmModal.style.cssText = 'display: flex !important;';
+        confirmModal.style.cssText = 'display: flex !important; pointer-events: auto !important;';
     }
 
     function hideConfirmModal() {
-        confirmModal.style.display = 'none';
+        confirmModal.style.cssText = 'display: none !important; pointer-events: none !important;';
         pendingConfirmCheckinId = null;
     }
 
