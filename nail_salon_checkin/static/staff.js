@@ -26,30 +26,34 @@
     async function loadQueue(options) {
         const isFirstLoad = !(options && options.silent);
         if (isFirstLoad) {
-            queueBody.innerHTML = '<tr><td colspan="6" class="muted">Loading&hellip;</td></tr>';
+            queueBody.innerHTML = '<tr><td colspan="7" class="muted">Loading&hellip;</td></tr>';
         }
         try {
             const res = await fetch(`/api/checkins?date=${encodeURIComponent(dateInput.value)}`);
             const data = await res.json();
             renderQueue(data.checkins || []);
         } catch (e) {
-            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="6" class="muted">Connection error.</td></tr>';
+            if (isFirstLoad) queueBody.innerHTML = '<tr><td colspan="7" class="muted">Connection error.</td></tr>';
         }
     }
 
     function renderQueue(checkins) {
         if (!checkins.length) {
-            queueBody.innerHTML = '<tr><td colspan="6" class="muted">No check-ins for this date yet.</td></tr>';
+            queueBody.innerHTML = '<tr><td colspan="7" class="muted">No check-ins for this date yet.</td></tr>';
             return;
         }
         queueBody.innerHTML = '';
         checkins.forEach((c) => {
             const tr = document.createElement('tr');
+            const durationLabel = c.duration_minutes
+                ? `${c.duration_minutes} min`
+                : '<span class="muted">Pending owner confirm</span>';
             tr.innerHTML = `
                 <td>${formatTime(c.time)}</td>
                 <td>${escapeHtml(c.name)}</td>
                 <td>${escapeHtml(c.phone || '—')}</td>
                 <td>${escapeHtml(c.service_note)}</td>
+                <td>${durationLabel}</td>
                 <td><span class="status-badge status-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>
                 <td></td>
             `;
