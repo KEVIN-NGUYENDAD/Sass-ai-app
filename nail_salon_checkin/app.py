@@ -20,7 +20,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 logger = logging.getLogger("nail_salon_checkin")
 
-# Configured with CHAIRS_PER_SLOT = 1 and SMS confirmation flow
+# Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
 
 # --- Configuration -----------------------------------------------------
 OPEN_HOUR = 9          # salon opens at 9:30 AM
