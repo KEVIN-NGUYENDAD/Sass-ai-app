@@ -1,9 +1,11 @@
 from pdf_search import search_pdf
+from interaction_checker import check_interactions
 
 def ai_agent(user_question):
     """
-    Bilingual agent: Detailed PDF answer + short explanation
-    NO QUIZ - Focus on comprehensive PDF content
+    Bilingual agent: Detailed PDF answer + short explanation + drug
+    interaction warning (when the question mentions a known interacting
+    pair) - Focus on comprehensive PDF content
     """
     if not user_question:
         return {
@@ -12,26 +14,28 @@ def ai_agent(user_question):
             "answer_en": "Error: Empty question!",
             "explanation_vi": "",
             "explanation_en": "",
-            "citation": "N/A"
+            "citation": "N/A",
+            "interactions": []
         }
-    
+
+    interactions = check_interactions(user_question)
+    warning_vi = _format_interaction_warning_vi(interactions)
+    warning_en = _format_interaction_warning_en(interactions)
+
     result = search_pdf(user_question)
-    
+
     if result.get("found"):
         file = result["file"]
         page = result["page"]
         content = result["content"]
-        
+
         pdf_display = file.replace("_", " ").replace("-", " ").replace(".pdf", "")
-        
+
         # Generate short explanation based on content
         explanation_vi = extract_explanation_vi(content, user_question)
         explanation_en = extract_explanation_en(content, user_question)
-        
-        return {
-            "found": True,
-            "question": user_question,
-            "answer_vi": f"""📚 **TRỌ TRỢ DƯỢC HỌC**
+
+        answer_vi = f"""📚 **TRỌ TRỢ DƯỢC HỌC**
 
 **Câu hỏi:** {user_question}
 
@@ -43,9 +47,9 @@ def ai_agent(user_question):
 
 **Chi tiết:**
 - File: {pdf_display}
-- Trang: {page}""",
-            
-            "answer_en": f"""📚 **PHARMACEUTICAL ASSISTANT**
+- Trang: {page}"""
+
+        answer_en = f"""📚 **PHARMACEUTICAL ASSISTANT**
 
 **Question:** {user_question}
 
@@ -57,25 +61,65 @@ def ai_agent(user_question):
 
 **Details:**
 - File: {pdf_display}
-- Page: {page}""",
-            
+- Page: {page}"""
+
+        if warning_vi:
+            answer_vi = warning_vi + "\n\n" + answer_vi
+            answer_en = warning_en + "\n\n" + answer_en
+
+        return {
+            "found": True,
+            "question": user_question,
+            "answer_vi": answer_vi,
+            "answer_en": answer_en,
             "explanation_vi": explanation_vi,
             "explanation_en": explanation_en,
             "citation": f"{pdf_display}, Page {page}",
             "file": file,
-            "page": page
+            "page": page,
+            "interactions": interactions
         }
-    
+
     else:
+        answer_vi = f"❌ Không tìm thấy: '{user_question}'"
+        answer_en = f"❌ Not found: '{user_question}'"
+
+        if warning_vi:
+            answer_vi = warning_vi + "\n\n" + answer_vi
+            answer_en = warning_en + "\n\n" + answer_en
+
         return {
             "found": False,
             "question": user_question,
-            "answer_vi": f"❌ Không tìm thấy: '{user_question}'",
-            "answer_en": f"❌ Not found: '{user_question}'",
+            "answer_vi": answer_vi,
+            "answer_en": answer_en,
             "explanation_vi": "Hãy thử hỏi câu hỏi khác hoặc kiểm tra từ khóa.",
             "explanation_en": "Try another question or check your keywords.",
-            "citation": "No source"
+            "citation": "No source",
+            "interactions": interactions
         }
+
+
+def _format_interaction_warning_vi(interactions):
+    if not interactions:
+        return ""
+
+    lines = ["⚠️ **CẢNH BÁO TƯƠNG TÁC THUỐC:**"]
+    for record in interactions:
+        lines.append(f"- ({record['severity'].upper()}) {record['explanation_vi']}")
+
+    return "\n".join(lines)
+
+
+def _format_interaction_warning_en(interactions):
+    if not interactions:
+        return ""
+
+    lines = ["⚠️ **DRUG INTERACTION WARNING:**"]
+    for record in interactions:
+        lines.append(f"- ({record['severity'].upper()}) {record['explanation_en']}")
+
+    return "\n".join(lines)
 
 def extract_explanation_vi(content, question):
     """Extract brief explanation from PDF content - Vietnamese"""
