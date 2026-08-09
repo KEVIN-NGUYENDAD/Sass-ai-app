@@ -250,6 +250,24 @@ textarea { resize: vertical; }
 
 .footer a:hover { text-decoration: underline; }
 
+.footer-link {
+    display: inline-block;
+    padding: 8px 16px !important;
+    color: var(--pink-dark) !important;
+    font-size: 14px !important;
+    font-weight: 600;
+    background: rgba(44, 90, 160, 0.08);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.footer-link:hover {
+    background: rgba(44, 90, 160, 0.15);
+    border-color: var(--pink-dark);
+    text-decoration: none;
+}
+
 .staff-toolbar {
     display: flex;
     align-items: center;
