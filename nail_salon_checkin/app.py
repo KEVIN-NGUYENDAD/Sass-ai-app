@@ -82,8 +82,10 @@ def send_sms(to_number, body):
     try:
         client = _twilio_client()
         client.messages.create(to=to_number, from_=TWILIO_FROM_NUMBER, body=body)
-    except Exception:
-        logger.exception("Failed to send SMS to %s", to_number)
+        logger.info("[SMS sent] to=%s", to_number)
+    except Exception as e:
+        logger.warning("[SMS failed - continuing anyway] to=%s error=%s", to_number, str(e))
+        # Don't crash; just log and continue. This allows the app to work even if Twilio is misconfigured.
 
 
 def get_base_url():
@@ -430,6 +432,7 @@ def api_owner_confirm(checkin_id):
 
         checkin["duration_minutes"] = duration
         checkin["confirmed"] = True
+        checkin["status"] = "confirmed"
         full_data["checkins"] = checkins
         _save_data(full_data)
 
@@ -481,7 +484,7 @@ def api_checkin_by_staff():
             "date": date_str,
             "time": time_str,
             "service_note": service_note,
-            "status": "waiting_confirm",
+            "status": "confirmed",
             "duration_minutes": duration_minutes,
             "confirmed": True,
             "confirm_token": uuid.uuid4().hex,
@@ -812,7 +815,9 @@ def get_customers():
             }
         customer_map[phone]["visit_count"] += 1
         if c.get("status") == "complete":
-            customer_map[phone]["last_visit"] = c.get("date", "")
+            current_date = c.get("date", "")
+            if current_date > customer_map[phone]["last_visit"]:
+                customer_map[phone]["last_visit"] = current_date
 
     customers = list(customer_map.values())
     customers.sort(key=lambda x: x.get("last_visit", "") or "", reverse=True)
@@ -852,11 +857,9 @@ def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
         lines.append("BÁO CÁO HÀNG NGÀY - Daily Report")
         lines.append(f"Date,{date_str}")
         lines.append("")
-        lines.append("Customer,Phone,Nickname,Service,Tips,Status")
+        lines.append("Customer,Phone,Nickname,Service,Status")
         for c in day_checkins:
-            report = reports.get(c.get("date", ""), {})
-            tip = report.get("tips", 0)
-            lines.append(f"{c.get('name', '')},{c.get('phone', '')},{c.get('nickname', '')},{c.get('service_note', '')},{tip},Done")
+            lines.append(f"{c.get('name', '')},{c.get('phone', '')},{c.get('nickname', '')},{c.get('service_note', '')},Done")
         report = reports.get(date_str, {})
         money = float(report.get("money_received", 0))
         tips = float(report.get("tips", 0))

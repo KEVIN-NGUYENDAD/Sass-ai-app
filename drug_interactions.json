@@ -1,0 +1,107 @@
+[
+  {
+    "drug_a": ["warfarin"],
+    "drug_b": ["aspirin", "ibuprofen", "naproxen", "nsaid"],
+    "severity": "high",
+    "explanation_vi": "Warfarin phối hợp với Aspirin/NSAID làm tăng đáng kể nguy cơ chảy máu do cộng hưởng tác dụng chống đông và kháng kết tập tiểu cầu.",
+    "explanation_en": "Warfarin combined with Aspirin/NSAIDs significantly increases bleeding risk due to the combined anticoagulant and antiplatelet effect."
+  },
+  {
+    "drug_a": ["warfarin"],
+    "drug_b": ["ciprofloxacin", "metronidazole", "antibiotic"],
+    "severity": "moderate",
+    "explanation_vi": "Một số kháng sinh (ciprofloxacin, metronidazole) ức chế chuyển hóa Warfarin, làm tăng INR và nguy cơ chảy máu.",
+    "explanation_en": "Certain antibiotics (ciprofloxacin, metronidazole) inhibit Warfarin metabolism, raising INR and bleeding risk."
+  },
+  {
+    "drug_a": ["lisinopril", "enalapril", "ace inhibitor"],
+    "drug_b": ["spironolactone", "potassium-sparing diuretic", "kali"],
+    "severity": "moderate",
+    "explanation_vi": "Thuốc ức chế men chuyển (ACE inhibitor) phối hợp với lợi tiểu giữ kali (spironolactone) có thể gây tăng kali máu nguy hiểm.",
+    "explanation_en": "ACE inhibitors combined with potassium-sparing diuretics (spironolactone) can cause dangerous hyperkalemia."
+  },
+  {
+    "drug_a": ["maoi", "phenelzine"],
+    "drug_b": ["fluoxetine", "sertraline", "ssri"],
+    "severity": "high",
+    "explanation_vi": "MAOI phối hợp với SSRI có thể gây hội chứng serotonin (sốt, kích động, co giật) — thường chống chỉ định phối hợp.",
+    "explanation_en": "MAOIs combined with SSRIs can cause serotonin syndrome (fever, agitation, seizures) — this combination is usually contraindicated."
+  },
+  {
+    "drug_a": ["simvastatin", "atorvastatin", "statin"],
+    "drug_b": ["grapefruit", "buoi"],
+    "severity": "moderate",
+    "explanation_vi": "Nước ép bưởi ức chế CYP3A4, làm tăng nồng độ statin trong máu, tăng nguy cơ đau cơ/tiêu cơ vân.",
+    "explanation_en": "Grapefruit juice inhibits CYP3A4, raising statin blood levels and increasing the risk of myopathy/rhabdomyolysis."
+  },
+  {
+    "drug_a": ["metformin"],
+    "drug_b": ["contrast dye", "thuoc can quang", "iodinated contrast"],
+    "severity": "moderate",
+    "explanation_vi": "Metformin dùng gần thời điểm chụp thuốc cản quang chứa iod có thể làm tăng nguy cơ nhiễm toan lactic nếu chức năng thận suy giảm.",
+    "explanation_en": "Metformin taken near the time of iodinated contrast imaging can increase lactic acidosis risk if renal function declines."
+  },
+  {
+    "drug_a": ["digoxin"],
+    "drug_b": ["furosemide", "loop diuretic", "loi tieu"],
+    "severity": "moderate",
+    "explanation_vi": "Lợi tiểu quai (furosemide) gây hạ kali máu, làm tăng độc tính của Digoxin trên tim.",
+    "explanation_en": "Loop diuretics (furosemide) cause hypokalemia, which increases Digoxin's cardiac toxicity."
+  },
+  {
+    "drug_a": ["insulin"],
+    "drug_b": ["propranolol", "beta-blocker", "beta blocker"],
+    "severity": "moderate",
+    "explanation_vi": "Thuốc chẹn beta (propranolol) có thể che lấp các triệu chứng cảnh báo hạ đường huyết (run, tim đập nhanh) khi dùng cùng Insulin.",
+    "explanation_en": "Beta-blockers (propranolol) can mask warning symptoms of hypoglycemia (tremor, tachycardia) when combined with Insulin."
+  },
+  {
+    "drug_a": ["methotrexate"],
+    "drug_b": ["ibuprofen", "naproxen", "nsaid"],
+    "severity": "high",
+    "explanation_vi": "NSAID làm giảm thải trừ Methotrexate qua thận, có thể gây tích lũy và ngộ độc nghiêm trọng.",
+    "explanation_en": "NSAIDs reduce renal clearance of Methotrexate, which can cause accumulation and serious toxicity."
+  },
+  {
+    "drug_a": ["etanercept", "adalimumab", "tnf inhibitor", "biologic dmard"],
+    "drug_b": ["live vaccine", "vaccine song", "mmr", "vaccine"],
+    "severity": "high",
+    "explanation_vi": "Thuốc sinh học ức chế TNF (etanercept, adalimumab) làm suy giảm miễn dịch — tiêm vắc-xin sống trong thời gian dùng thuốc có thể gây nhiễm trùng nặng.",
+    "explanation_en": "TNF-inhibitor biologics (etanercept, adalimumab) suppress immune function — live vaccines given during treatment can cause serious infection."
+  },
+  {
+    "drug_a": ["darbepoetin", "epoetin", "esa", "erythropoiesis"],
+    "drug_b": ["hypertension", "tang huyet ap", "cao huyet ap"],
+    "severity": "moderate",
+    "explanation_vi": "Thuốc kích thích sinh hồng cầu (ESA như darbepoetin) ở người tăng huyết áp không kiểm soát làm tăng nguy cơ biến cố tim mạch.",
+    "explanation_en": "Erythropoiesis-stimulating agents (ESAs like darbepoetin) in patients with uncontrolled hypertension increase cardiovascular event risk."
+  },
+  {
+    "drug_a": ["clopidogrel"],
+    "drug_b": ["omeprazole", "ppi", "proton pump inhibitor"],
+    "severity": "moderate",
+    "explanation_vi": "PPI (omeprazole) ức chế CYP2C19, làm giảm chuyển hóa Clopidogrel thành dạng có hoạt tính, giảm hiệu quả chống kết tập tiểu cầu.",
+    "explanation_en": "PPIs (omeprazole) inhibit CYP2C19, reducing conversion of Clopidogrel to its active form and weakening its antiplatelet effect."
+  },
+  {
+    "drug_a": ["doxycycline", "tetracycline"],
+    "drug_b": ["calcium", "canxi", "antacid", "iron", "sat", "magnesium"],
+    "severity": "moderate",
+    "explanation_vi": "Canxi, sắt, magie hoặc thuốc kháng acid tạo phức với Tetracycline/Doxycycline, làm giảm hấp thu kháng sinh qua đường uống.",
+    "explanation_en": "Calcium, iron, magnesium, or antacids chelate Tetracycline/Doxycycline, reducing oral absorption of the antibiotic."
+  },
+  {
+    "drug_a": ["sildenafil", "viagra"],
+    "drug_b": ["nitrate", "nitroglycerin"],
+    "severity": "high",
+    "explanation_vi": "Sildenafil phối hợp với Nitrate gây hạ huyết áp nghiêm trọng, đe dọa tính mạng — chống chỉ định tuyệt đối.",
+    "explanation_en": "Sildenafil combined with Nitrates causes severe, life-threatening hypotension — this combination is absolutely contraindicated."
+  },
+  {
+    "drug_a": ["levothyroxine"],
+    "drug_b": ["calcium", "canxi", "iron", "sat"],
+    "severity": "mild",
+    "explanation_vi": "Canxi hoặc sắt uống gần thời điểm với Levothyroxine làm giảm hấp thu hormone tuyến giáp — nên uống cách nhau ít nhất 4 giờ.",
+    "explanation_en": "Calcium or iron taken close to Levothyroxine reduces thyroid hormone absorption — space doses at least 4 hours apart."
+  }
+]
