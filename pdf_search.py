@@ -9,6 +9,8 @@
 # substring matching did, without needing a heavy embedding model that
 # wouldn't fit Render's free-tier build/memory limits.
 
+import re
+
 from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -17,11 +19,43 @@ PDF_FILES = [
     "B2_Duoc ly-Biopharmaceuticals-2026.pdf"
 ]
 
-# Below this cosine-similarity score, treat the match as noise rather than
-# a real answer. Tuned empirically against the two PDFs in this repo —
-# short queries against long pages rarely score above ~0.5 even for a
-# genuinely relevant page, so this is deliberately low.
-MIN_SCORE = 0.05
+# Two similarity-score floors, not one - see the "signal term" comment
+# below for why. TF-IDF score alone is NOT a reliable relevance signal on
+# these two PDFs: measured against real test questions, "Tác dụng phụ
+# thường gặp của Amoxicillin là gì?" (Amoxicillin appears zero times in
+# either PDF) scored HIGHER (0.326) than a genuinely on-topic query like
+# "biosimilar là gì" (0.182) - the score was driven by generic Vietnamese
+# question phrasing shared with unrelated pages ("tác dụng phụ" also
+# appears on a TNF-inhibitor side-effects slide), not by real relevance to
+# Amoxicillin.
+#
+# MIN_SIGNAL_LEN: when the query contains a "signal term" - a plain-ASCII
+# token of this many+ characters, which in practice means a drug/technical
+# name rather than accented Vietnamese phrasing - we already independently
+# verify that term literally appears on the candidate page (see below), so
+# the score just needs to clear a low bar (MIN_SCORE_WITH_SIGNAL) to rule
+# out a near-zero fluke.
+#
+# MIN_SCORE: for queries with NO signal term (pure Vietnamese conceptual
+# phrasing, nothing to literally verify), the score is the *only* defense
+# against a confident wrong answer, and empirically it's a leaky one: real
+# off-topic questions like "Bệnh nhân tiểu đường có thể dùng thuốc cảm nào
+# an toàn?" scored 0.19, barely below genuinely on-topic questions like
+# "thuốc sinh học tương tự" at 0.22 - these two PDFs are lecture-slide Q&A
+# style throughout, so generic Vietnamese medical phrasing overlaps a lot
+# regardless of topic. 0.20 was picked as the highest value that still
+# keeps every known-relevant no-signal test query while rejecting every
+# known off-topic one, but treat it as an approximate heuristic, not a
+# guarantee - a differently-phrased off-topic question could still slip
+# through, or a differently-phrased on-topic one could get rejected.
+MIN_SIGNAL_LEN = 5
+MIN_SCORE_WITH_SIGNAL = 0.05
+MIN_SCORE = 0.20
+
+
+def _extract_signal_terms(query):
+    tokens = re.findall(r"[A-Za-z]+", query)
+    return [t.lower() for t in tokens if len(t) >= MIN_SIGNAL_LEN]
 
 _index = None  # lazily built: {"vectorizer", "matrix", "pages": [...]}
 
@@ -91,10 +125,35 @@ def search_pdf(query):
     # no need for a separate normalization step.
     scores = (index["matrix"] @ query_vector.T).toarray().ravel()
 
-    best_idx = int(scores.argmax())
+    # If the query names a specific drug/technical term, only consider
+    # pages that actually contain it - see MIN_SIGNAL_LEN comment above for
+    # why the raw TF-IDF score can't be trusted alone here. This is checked
+    # across every page (not just whatever TF-IDF ranked first), so a term
+    # that appears on a page TF-IDF didn't rank highest still gets found.
+    signal_terms = _extract_signal_terms(query)
+    candidate_indices = range(len(index["pages"]))
+    min_score = MIN_SCORE
+
+    if signal_terms:
+        matching_indices = [
+            i for i in candidate_indices
+            if any(term in index["pages"][i]["content"].lower() for term in signal_terms)
+        ]
+        if not matching_indices:
+            return {
+                "found": False,
+                "message": (
+                    f"NOT FOUND: query mentions {signal_terms} which do not "
+                    f"appear anywhere in the indexed PDFs"
+                ),
+            }
+        candidate_indices = matching_indices
+        min_score = MIN_SCORE_WITH_SIGNAL
+
+    best_idx = max(candidate_indices, key=lambda i: scores[i])
     best_score = float(scores[best_idx])
 
-    if best_score < MIN_SCORE:
+    if best_score < min_score:
         return {
             "found": False,
             "message": f"NOT FOUND in PDFs: '{query}'"

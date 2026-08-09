@@ -1,11 +1,17 @@
 from pdf_search import search_pdf
 from interaction_checker import check_interactions
+from question_splitter import split_questions
 
 def ai_agent(user_question):
     """
     Bilingual agent: Detailed PDF answer + short explanation + drug
     interaction warning (when the question mentions a known interacting
-    pair) - Focus on comprehensive PDF content
+    pair) - Focus on comprehensive PDF content.
+
+    A message containing several distinct questions (seen in real usage -
+    users pasting a whole list at once) is split and answered question by
+    question instead of being searched as one diluted blob, which almost
+    never matches any single page well.
     """
     if not user_question:
         return {
@@ -18,6 +24,42 @@ def ai_agent(user_question):
             "interactions": []
         }
 
+    sub_questions = split_questions(user_question)
+
+    if len(sub_questions) <= 1:
+        return _answer_single(user_question)
+
+    return _answer_multi(user_question, sub_questions)
+
+
+def _answer_multi(original_question, sub_questions):
+    sections_vi = []
+    sections_en = []
+    citations = []
+    all_interactions = []
+    any_found = False
+
+    for i, sub_question in enumerate(sub_questions, start=1):
+        single = _answer_single(sub_question)
+        any_found = any_found or single["found"]
+        citations.append(single["citation"])
+        all_interactions.extend(single["interactions"])
+        sections_vi.append(f"**Câu {i}: {sub_question}**\n{single['answer_vi']}")
+        sections_en.append(f"**Question {i}: {sub_question}**\n{single['answer_en']}")
+
+    return {
+        "found": any_found,
+        "question": original_question,
+        "answer_vi": "\n\n---\n\n".join(sections_vi),
+        "answer_en": "\n\n---\n\n".join(sections_en),
+        "explanation_vi": "",
+        "explanation_en": "",
+        "citation": "; ".join(citations),
+        "interactions": all_interactions
+    }
+
+
+def _answer_single(user_question):
     interactions = check_interactions(user_question)
     warning_vi = _format_interaction_warning_vi(interactions)
     warning_en = _format_interaction_warning_en(interactions)
@@ -81,8 +123,18 @@ def ai_agent(user_question):
         }
 
     else:
-        answer_vi = f"❌ Không tìm thấy: '{user_question}'"
-        answer_en = f"❌ Not found: '{user_question}'"
+        answer_vi = (
+            f"❌ Không tìm thấy: '{user_question}'\n\n"
+            "Câu hỏi này nằm ngoài phạm vi 2 tài liệu hiện có (Hóa Dược & "
+            "Dược lý - Dược phẩm sinh học). Tài liệu không đề cập đến nội "
+            "dung này."
+        )
+        answer_en = (
+            f"❌ Not found: '{user_question}'\n\n"
+            "This question is outside the scope of the two available "
+            "documents (Pharmaceutical Chemistry & Pharmacology - "
+            "Biopharmaceuticals). They do not cover this topic."
+        )
 
         if warning_vi:
             answer_vi = warning_vi + "\n\n" + answer_vi
@@ -93,8 +145,8 @@ def ai_agent(user_question):
             "question": user_question,
             "answer_vi": answer_vi,
             "answer_en": answer_en,
-            "explanation_vi": "Hãy thử hỏi câu hỏi khác hoặc kiểm tra từ khóa.",
-            "explanation_en": "Try another question or check your keywords.",
+            "explanation_vi": "",
+            "explanation_en": "",
             "citation": "No source",
             "interactions": interactions
         }
@@ -129,11 +181,11 @@ def extract_explanation_vi(content, question):
         "biosimilar": "Dược phẩm sinh học tương tự là những phiên bản được phê duyệt pháp lý sau khi bảo hộ sáng chế hết hạn.",
         "hoạt chất": "Hoạt chất dược là thành phần chính trong dược phẩm có tác dụng chữa bệnh hoặc điều chỉnh chức năng cơ thể.",
     }
-    
+
     for key, explanation in explanations.items():
         if key.lower() in content.lower() or key.lower() in question.lower():
             return explanation
-    
+
     return "Nội dung PDF cung cấp thông tin chi tiết về khái niệm được hỏi. Tham khảo tài liệu đầy đủ để hiểu sâu hơn."
 
 def extract_explanation_en(content, question):
@@ -144,9 +196,9 @@ def extract_explanation_en(content, question):
         "biosimilar": "Biosimilar drugs are legally approved subsequent versions after patent and exclusivity expiry.",
         "active": "Active pharmaceutical ingredients are the main components in medicines that have therapeutic effects.",
     }
-    
+
     for key, explanation in explanations.items():
         if key.lower() in content.lower() or key.lower() in question.lower():
             return explanation
-    
+
     return "The PDF content provides detailed information about the requested concept. Refer to the complete document for deeper understanding."
