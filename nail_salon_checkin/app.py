@@ -82,8 +82,10 @@ def send_sms(to_number, body):
     try:
         client = _twilio_client()
         client.messages.create(to=to_number, from_=TWILIO_FROM_NUMBER, body=body)
-    except Exception:
-        logger.exception("Failed to send SMS to %s", to_number)
+        logger.info("[SMS sent] to=%s", to_number)
+    except Exception as e:
+        logger.warning("[SMS failed - continuing anyway] to=%s error=%s", to_number, str(e))
+        # Don't crash; just log and continue. This allows the app to work even if Twilio is misconfigured.
 
 
 def get_base_url():
