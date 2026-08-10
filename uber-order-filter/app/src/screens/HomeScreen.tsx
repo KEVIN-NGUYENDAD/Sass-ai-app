@@ -6,9 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { OrderCard } from '../components';
-import { useFilters, useDecisions, useAudio } from '../hooks';
+import { useFilters, useDecisions, useAudio, useOCRService } from '../hooks';
 import { evaluateOrder } from '../services/filterService';
 import { UberOrder } from '../types';
 import { settingsStorage } from '../services/storageService';
@@ -18,6 +19,24 @@ export const HomeScreen: React.FC = () => {
   const { addDecision } = useDecisions();
   const [settings, setSettings] = useState<any>(null);
   const { playAlert } = useAudio(settings || {});
+  const [ocrStatus, setOcrStatus] = useState<string>('Ready');
+
+  // Setup OCR service (iOS only)
+  const { isMonitoring, error: ocrError } = useOCRService(
+    (detectedOrder: UberOrder) => {
+      console.log('Order detected via OCR:', detectedOrder);
+      // Add to orders list
+      setOrders(prev => [detectedOrder, ...prev]);
+
+      // Auto-evaluate if filter is active
+      if (activeFilter) {
+        const recommendation = evaluateOrder(detectedOrder, activeFilter);
+        if (recommendation.recommendation === 'poor' && settings.enableAudio) {
+          playAlert(settings.audioType);
+        }
+      }
+    }
+  );
 
   // Sample orders for demo
   const [orders, setOrders] = useState<UberOrder[]>([
@@ -102,15 +121,40 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+  useEffect(() => {
+    setOcrStatus(isMonitoring ? '📸 Listening' : 'Paused');
+  }, [isMonitoring]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Order Queue</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Order Queue</Text>
+          {Platform.OS === 'ios' && (
+            <View
+              style={[
+                styles.ocrBadge,
+                isMonitoring
+                  ? styles.ocrBadgeActive
+                  : styles.ocrBadgeInactive,
+              ]}
+            >
+              <Text style={styles.ocrBadgeText}>{ocrStatus}</Text>
+            </View>
+          )}
+        </View>
+
         {activeFilter && (
           <View style={styles.filterBadge}>
             <Text style={styles.filterBadgeText}>
               Filter: {activeFilter.name}
             </Text>
+          </View>
+        )}
+
+        {ocrError && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>⚠️ {ocrError}</Text>
           </View>
         )}
       </View>
@@ -176,11 +220,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0dbd5',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
     color: '#1a472a',
-    marginBottom: 8,
+  },
+  ocrBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  ocrBadgeActive: {
+    backgroundColor: 'rgba(39, 174, 96, 0.2)',
+  },
+  ocrBadgeInactive: {
+    backgroundColor: 'rgba(231, 76, 60, 0.2)',
+  },
+  ocrBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1a472a',
   },
   filterBadge: {
     backgroundColor: '#1a472a',
@@ -188,11 +253,25 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     alignSelf: 'flex-start',
+    marginBottom: 8,
   },
   filterBadgeText: {
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  errorBox: {
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#e74c3c',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 4,
+  },
+  errorText: {
+    color: '#e74c3c',
+    fontSize: 12,
+    fontWeight: '500',
   },
   ordersList: {
     flex: 1,
