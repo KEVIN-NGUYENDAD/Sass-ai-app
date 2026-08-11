@@ -1,0 +1,28 @@
+{
+  "name": "dual-agents-system",
+  "version": "1.0.0",
+  "description": "Dual AI Agent System - Cybersecurity & AI/ML Experts powered by Claude",
+  "main": "dual-agents-coordinator.js",
+  "type": "module",
+  "scripts": {
+    "start": "node dual-agents-coordinator.js",
+    "dev": "node --watch dual-agents-coordinator.js",
+    "setup": "npm install"
+  },
+  "keywords": [
+    "claude",
+    "ai-agents",
+    "cybersecurity",
+    "machine-learning",
+    "conversational-ai"
+  ],
+  "author": "Development Team",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.25.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
