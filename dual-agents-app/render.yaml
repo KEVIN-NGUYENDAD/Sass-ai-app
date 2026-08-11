@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: dual-agents-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        scope: build
+        sync: false
+      - key: NODE_ENV
+        value: production
