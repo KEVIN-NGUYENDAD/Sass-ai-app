@@ -276,11 +276,33 @@
       max-height: 100px;
       background: var(--bg-primary);
       color: var(--text-primary);
+      transition: border-color 0.2s;
     }
 
     .input-field:focus {
       outline: none;
       border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .input-field:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .char-count {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .char-count.warning {
+      color: var(--warning);
+    }
+
+    .char-count.error {
+      color: var(--error);
     }
 
     .send-btn {
@@ -381,13 +403,23 @@
 
       <div class="input-area">
         <div class="input-wrapper">
-          <textarea
-            class="input-field"
-            id="messageInput"
-            placeholder="Ask me anything..."
-            rows="1"
-          ></textarea>
-          <button class="send-btn" id="sendBtn">Send</button>
+          <div style="flex: 1;">
+            <textarea
+              class="input-field"
+              id="messageInput"
+              placeholder="Ask me anything..."
+              rows="1"
+              maxlength="5000"
+              aria-label="Message input"
+            ></textarea>
+            <div class="char-count" id="charCount">0 / 5000</div>
+          </div>
+          <button
+            class="send-btn"
+            id="sendBtn"
+            aria-label="Send message"
+            title="Send (Enter)"
+          >Send</button>
         </div>
       </div>
     </div>
@@ -417,33 +449,57 @@
     const messageInputEl = document.getElementById("messageInput");
     const sendBtnEl = document.getElementById("sendBtn");
     const serverStatusEl = document.getElementById("serverStatus");
+    const charCountEl = document.getElementById("charCount");
     const agentBtnsEl = document.querySelectorAll(".agent-btn");
+
+    let isLoading = false;
+    let serverReady = false;
+    let statusCheckTimer = null;
 
     // Check server status
     async function checkServerStatus() {
       try {
-        const res = await fetch("/api/agents");
+        const res = await fetch("/api/agents", { signal: AbortSignal.timeout(5000) });
         if (res.ok) {
-          serverStatusEl.textContent = "✅ Ready";
-          serverStatusEl.classList.add("ready");
-          messageInputEl.disabled = false;
-          sendBtnEl.disabled = false;
+          if (!serverReady) {
+            serverStatusEl.textContent = "✅ Ready";
+            serverStatusEl.classList.add("ready");
+            messageInputEl.disabled = false;
+            sendBtnEl.disabled = false;
+            serverReady = true;
+            console.log("✅ Server connected");
+          }
           return true;
         }
       } catch (error) {
-        serverStatusEl.textContent = "❌ Offline";
-        serverStatusEl.classList.remove("ready");
-        messageInputEl.disabled = true;
-        sendBtnEl.disabled = true;
+        if (serverReady) {
+          serverStatusEl.textContent = "❌ Offline";
+          serverStatusEl.classList.remove("ready");
+          messageInputEl.disabled = true;
+          sendBtnEl.disabled = true;
+          serverReady = false;
+          console.error("❌ Server disconnected");
+        }
       }
       return false;
     }
+
+    // Update character count
+    messageInputEl.addEventListener("input", () => {
+      const len = messageInputEl.value.length;
+      charCountEl.textContent = `${len} / 5000`;
+      charCountEl.classList.remove("warning", "error");
+      if (len > 4500) charCountEl.classList.add("error");
+      else if (len > 4000) charCountEl.classList.add("warning");
+    });
 
     // Initialize
     async function init() {
       await checkServerStatus();
       updateAgentDisplay();
       messageInputEl.focus();
+      // Check status on focus only (not polling)
+      window.addEventListener("focus", checkServerStatus);
     }
 
     // Agent selection
@@ -500,14 +556,20 @@
 
     async function sendMessage() {
       const message = messageInputEl.value.trim();
-      if (!message) return;
+      if (!message || isLoading) return;
 
+      isLoading = true;
       conversationHistory[currentAgent].push({ role: "user", content: message });
       messageInputEl.value = "";
+      charCountEl.textContent = "0 / 5000";
       sendBtnEl.disabled = true;
+      sendBtnEl.textContent = "⏳ Thinking...";
       renderMessages();
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -515,28 +577,40 @@
             agent: currentAgent,
             messages: conversationHistory[currentAgent],
           }),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
+
         if (!res.ok) {
-          throw new Error(`Server error: ${res.status}`);
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server error: ${res.status}`);
         }
 
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.message) {
           conversationHistory[currentAgent].push({
             role: "assistant",
             content: data.message,
           });
           renderMessages();
         } else {
-          throw new Error(data.error || "Unknown error");
+          throw new Error(data.error || "No response received");
         }
       } catch (error) {
-        alert(`Error: ${error.message}`);
+        if (error.name === "AbortError") {
+          console.error("Request timeout");
+          alert("Request timed out - the API took too long to respond");
+        } else {
+          console.error("Chat error:", error.message);
+          alert(`Error: ${error.message}`);
+        }
         conversationHistory[currentAgent].pop();
         renderMessages();
       } finally {
+        isLoading = false;
         sendBtnEl.disabled = false;
+        sendBtnEl.textContent = "Send";
         messageInputEl.focus();
       }
     }
@@ -550,7 +624,11 @@
     });
 
     init();
-    setInterval(checkServerStatus, 5000);
+
+    // Check status when page becomes visible
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkServerStatus();
+    });
   </script>
 </body>
 </html>
