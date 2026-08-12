@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "tenant_handle": "huong-pharmacy",
+  "project_name": "huong-pharmacy-ai-copilot",
+  "description": "Nail Salon Check-In System + Development Procedures",
+  "project_id": "proj_huong_pharmacy_$(date +%s)",
+  "root": ".",
+  "git_repo": "https://github.com/KEVIN-NGUYENDAD/huong-pharmacy-ai-copilot",
+  "doc_dirs": [
+    ".",
+    "development-procedures",
+    ".claude"
+  ],
+  "memory": {
+    "enabled": true,
+    "episode_retention": 100,
+    "cluster_threshold": 0.7
+  },
+  "platforms": {
+    "claude_code": {
+      "enabled": true,
+      "hook_enabled": true
+    }
+  }
+}
