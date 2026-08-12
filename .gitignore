@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 nail_salon_checkin/data/
+.greprag/store/
