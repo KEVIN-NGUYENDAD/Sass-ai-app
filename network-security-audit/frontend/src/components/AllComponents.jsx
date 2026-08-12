@@ -1,26 +1,44 @@
 import React, { useState, useEffect } from 'react';
 
 // Port Scanner Component
-export function PortScanner({ apiUrl, onScan }) {
+export function PortScanner({ apiUrl, onScan, strings }) {
   const [target, setTarget] = useState('localhost');
   const [ports, setPorts] = useState('1-1000');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const validateInputs = () => {
+    const newErrors = {};
+    if (!target.trim()) newErrors.target = strings.common.required;
+    if (!ports.trim()) newErrors.ports = strings.common.required;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleScan = async (e) => {
     e.preventDefault();
+    if (!validateInputs()) return;
+
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       const response = await fetch(`${apiUrl}/api/scan/ports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target, ports })
+        body: JSON.stringify({ target, ports }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
 
       if (data.success) {
@@ -32,10 +50,14 @@ export function PortScanner({ apiUrl, onScan }) {
           security_score: data.data.security_score
         });
       } else {
-        setError(data.error || 'Scan failed');
+        setError(data.error || strings.portScanner.error);
       }
     } catch (err) {
-      setError('Connection error: ' + err.message);
+      if (err.name === 'AbortError') {
+        setError('Scan timeout - try fewer ports');
+      } else {
+        setError(strings.common.connectionError + ': ' + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,34 +65,38 @@ export function PortScanner({ apiUrl, onScan }) {
 
   return (
     <div className="card">
-      <h2>🔍 Quét Cổng (Port Scanner)</h2>
+      <h2>{strings.portScanner.title}</h2>
 
       <form onSubmit={handleScan}>
         <div className="form-group">
-          <label>Target Host/IP</label>
+          <label>{strings.portScanner.targetHost}</label>
           <input
             type="text"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
-            placeholder="localhost, 192.168.1.1, example.com"
-            required
+            placeholder={strings.portScanner.targetHostPlaceholder}
+            disabled={loading}
+            aria-label={strings.portScanner.targetHost}
           />
+          {errors.target && <small style={{ color: 'red' }}>{errors.target}</small>}
         </div>
 
         <div className="form-group">
-          <label>Dải Cổng (Port Range)</label>
+          <label>{strings.portScanner.portRange}</label>
           <input
             type="text"
             value={ports}
             onChange={(e) => setPorts(e.target.value)}
-            placeholder="1-1000 hoặc 21,22,80,443"
-            required
+            placeholder={strings.portScanner.portRangePlaceholder}
+            disabled={loading}
+            aria-label={strings.portScanner.portRange}
           />
-          <small>Ví dụ: 1-1000 hoặc 21,22,80,443,3306,5432</small>
+          <small>{strings.portScanner.example}</small>
+          {errors.ports && <small style={{ color: 'red' }}>{errors.ports}</small>}
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? '⏳ Đang quét...' : '🔍 Bắt đầu Quét'}
+          {loading ? strings.portScanner.scanning : strings.portScanner.scanButton}
         </button>
       </form>
 
@@ -78,32 +104,36 @@ export function PortScanner({ apiUrl, onScan }) {
 
       {result && (
         <div className="result-section">
-          <h3>📊 Kết Quả Quét</h3>
+          <h3>{strings.portScanner.results}</h3>
 
           <div className="security-score">
             <div className={`score-circle ${result.security_score > 70 ? 'high' : result.security_score > 40 ? 'medium' : 'low'}`}>
               {result.security_score}%
             </div>
-            <p><strong>An Ninh Điểm</strong></p>
+            <p><strong>{strings.portScanner.securityScore}</strong></p>
           </div>
 
           <div className="grid-2">
             <div>
-              <h4>✅ Cổng Mở ({result.open_ports.length})</h4>
-              {result.open_ports.map((port, idx) => (
-                <div key={idx} className={`port-item ${port.risk.toLowerCase()}-risk`}>
-                  <div>
-                    <strong>Port {port.port}</strong> - {port.service}
-                    <br/>
-                    <small>Risk: {port.risk}</small>
+              <h4>{strings.portScanner.openPorts} ({result.open_ports.length})</h4>
+              {result.open_ports.length > 0 ? (
+                result.open_ports.map((port, idx) => (
+                  <div key={idx} className={`port-item ${port.risk.toLowerCase()}-risk`}>
+                    <div>
+                      <strong>Port {port.port}</strong> - {port.service}
+                      <br/>
+                      <small>Risk: {port.risk}</small>
+                    </div>
+                    <span className="status-badge open">OPEN</span>
                   </div>
-                  <span className="status-badge open">OPEN</span>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="alert alert-success">{strings.portScanner.noOpenPorts}</div>
+              )}
             </div>
 
             <div>
-              <h4>💡 Đề Xuất</h4>
+              <h4>{strings.portScanner.recommendations}</h4>
               {result.recommendations.map((rec, idx) => (
                 <div key={idx} className={`recommendation ${rec.includes('❌') ? 'critical' : rec.includes('⚠') ? 'warning' : ''}`}>
                   {rec}
@@ -113,7 +143,10 @@ export function PortScanner({ apiUrl, onScan }) {
           </div>
 
           <p className="text-muted mt-3">
-            Quét {result.total_ports_scanned} cổng - {result.open_ports.length} mở, {result.closed_ports_count} đóng
+            {strings.portScanner.scannedInfo
+              .replace('{{total}}', result.total_ports_scanned)
+              .replace('{{open}}', result.open_ports.length)
+              .replace('{{closed}}', result.closed_ports_count)}
           </p>
         </div>
       )}
@@ -122,15 +155,28 @@ export function PortScanner({ apiUrl, onScan }) {
 }
 
 // Password Checker Component
-export function PasswordChecker({ apiUrl, onCheck }) {
+export function PasswordChecker({ apiUrl, onCheck, strings }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [validationError, setValidationError] = useState('');
 
   const handleCheck = async (e) => {
     e.preventDefault();
+    setValidationError('');
+
+    if (!password) {
+      setValidationError(strings.passwordChecker.required);
+      return;
+    }
+
+    if (password.length < 8) {
+      setValidationError(strings.passwordChecker.minLength);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -151,10 +197,10 @@ export function PasswordChecker({ apiUrl, onCheck }) {
           score: data.data.score
         });
       } else {
-        setError(data.error || 'Check failed');
+        setError(data.error || strings.passwordChecker.error);
       }
     } catch (err) {
-      setError('Connection error: ' + err.message);
+      setError(strings.common.connectionError + ': ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -162,18 +208,19 @@ export function PasswordChecker({ apiUrl, onCheck }) {
 
   return (
     <div className="card">
-      <h2>🔐 Kiểm Tra Độ Mạnh Mật Khẩu</h2>
+      <h2>{strings.passwordChecker.title}</h2>
 
       <form onSubmit={handleCheck}>
         <div className="form-group">
-          <label>Nhập Mật Khẩu Để Kiểm Tra</label>
+          <label>{strings.passwordChecker.enterPassword}</label>
           <div style={{ position: 'relative' }}>
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nhập mật khẩu..."
-              required
+              placeholder={strings.passwordChecker.passwordPlaceholder}
+              disabled={loading}
+              aria-label={strings.passwordChecker.enterPassword}
             />
             <button
               type="button"
@@ -188,15 +235,17 @@ export function PasswordChecker({ apiUrl, onCheck }) {
                 cursor: 'pointer',
                 fontSize: '1.2rem'
               }}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? '👁️' : '👁️‍🗨️'}
             </button>
           </div>
-          <small>Mật khẩu chỉ được kiểm tra cục bộ, không được gửi lên server</small>
+          <small>{strings.passwordChecker.note}</small>
+          {validationError && <small style={{ color: 'red' }}>{validationError}</small>}
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? '⏳ Đang kiểm tra...' : '🔍 Kiểm Tra'}
+          {loading ? strings.passwordChecker.checking : strings.passwordChecker.checkButton}
         </button>
       </form>
 
@@ -204,7 +253,7 @@ export function PasswordChecker({ apiUrl, onCheck }) {
 
       {result && (
         <div className="result-section">
-          <h3>📊 Kết Quả Kiểm Tra</h3>
+          <h3>{strings.passwordChecker.results}</h3>
 
           <div className="security-score">
             <div className={`score-circle ${result.color === 'green' ? 'high' : result.color === 'yellow' ? 'medium' : 'low'}`}>
@@ -215,10 +264,10 @@ export function PasswordChecker({ apiUrl, onCheck }) {
 
           <div className="grid-2">
             <div>
-              <h4>📝 Thông Tin</h4>
+              <h4>📝 {strings.passwordChecker.passwordLength}</h4>
               <div className="list-item">
                 <span className="list-item-icon">📏</span>
-                <div>Độ dài: <strong>{result.password_length}</strong> ký tự</div>
+                <div>{result.password_length} {strings.passwordChecker.characters}</div>
               </div>
               <div className="progress-bar">
                 <div
@@ -229,7 +278,7 @@ export function PasswordChecker({ apiUrl, onCheck }) {
             </div>
 
             <div>
-              <h4>⚠️ Nhận Xét</h4>
+              <h4>⚠️ {strings.passwordChecker.feedback}</h4>
               {result.feedback.length > 0 ? (
                 result.feedback.map((item, idx) => (
                   <div key={idx} className="recommendation critical">
@@ -238,13 +287,13 @@ export function PasswordChecker({ apiUrl, onCheck }) {
                 ))
               ) : (
                 <div className="recommendation" style={{ background: '#e8f5e9', borderLeft: '4px solid #51cf66' }}>
-                  ✓ Tuyệt vời! Mật khẩu rất mạnh
+                  {strings.passwordChecker.excellent}
                 </div>
               )}
             </div>
           </div>
 
-          <h4 style={{ marginTop: '2rem' }}>💡 Đề Xuất</h4>
+          <h4 style={{ marginTop: '2rem' }}>💡 {strings.passwordChecker.recommendations}</h4>
           {result.recommendations.map((rec, idx) => (
             <div key={idx} className="recommendation warning">
               💡 {rec}
@@ -257,16 +306,27 @@ export function PasswordChecker({ apiUrl, onCheck }) {
 }
 
 // WiFi Security Checker Component
-export function WiFiSecurityChecker({ apiUrl, onCheck }) {
+export function WiFiSecurityChecker({ apiUrl, onCheck, strings }) {
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const validateInputs = () => {
+    const newErrors = {};
+    if (!ssid.trim()) newErrors.ssid = strings.common.required;
+    if (!password.trim()) newErrors.password = strings.common.required;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleCheck = async (e) => {
     e.preventDefault();
+    if (!validateInputs()) return;
+
     setLoading(true);
     setError(null);
 
@@ -287,10 +347,10 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
           security_score: data.data.security_score
         });
       } else {
-        setError(data.error || 'Check failed');
+        setError(data.error || strings.wifiSecurity.error);
       }
     } catch (err) {
-      setError('Connection error: ' + err.message);
+      setError(strings.common.connectionError + ': ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -298,29 +358,32 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
 
   return (
     <div className="card">
-      <h2>📡 Kiểm Tra An Ninh WiFi</h2>
+      <h2>{strings.wifiSecurity.title}</h2>
 
       <form onSubmit={handleCheck}>
         <div className="form-group">
-          <label>Tên WiFi (SSID)</label>
+          <label>{strings.wifiSecurity.ssidLabel}</label>
           <input
             type="text"
             value={ssid}
             onChange={(e) => setSsid(e.target.value)}
-            placeholder="Nhập tên WiFi..."
-            required
+            placeholder={strings.wifiSecurity.ssidPlaceholder}
+            disabled={loading}
+            aria-label={strings.wifiSecurity.ssidLabel}
           />
+          {errors.ssid && <small style={{ color: 'red' }}>{errors.ssid}</small>}
         </div>
 
         <div className="form-group">
-          <label>Mật Khẩu WiFi</label>
+          <label>{strings.wifiSecurity.passwordLabel}</label>
           <div style={{ position: 'relative' }}>
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nhập mật khẩu WiFi..."
-              required
+              placeholder={strings.wifiSecurity.passwordPlaceholder}
+              disabled={loading}
+              aria-label={strings.wifiSecurity.passwordLabel}
             />
             <button
               type="button"
@@ -335,14 +398,16 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
                 cursor: 'pointer',
                 fontSize: '1.2rem'
               }}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? '👁️' : '👁️‍🗨️'}
             </button>
           </div>
+          {errors.password && <small style={{ color: 'red' }}>{errors.password}</small>}
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? '⏳ Đang kiểm tra...' : '🔍 Kiểm Tra WiFi'}
+          {loading ? strings.wifiSecurity.checking : strings.wifiSecurity.checkButton}
         </button>
       </form>
 
@@ -350,34 +415,34 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
 
       {result && (
         <div className="result-section">
-          <h3>📊 Kết Quả Kiểm Tra WiFi</h3>
+          <h3>{strings.wifiSecurity.results}</h3>
 
           <div className="security-score">
             <div className={`score-circle ${result.security_score > 70 ? 'high' : result.security_score > 40 ? 'medium' : 'low'}`}>
               {result.security_score}%
             </div>
-            <p><strong>Điểm An Ninh</strong></p>
+            <p><strong>{strings.wifiSecurity.passwordLabel}</strong></p>
           </div>
 
           <div className="grid-2">
             <div>
-              <h4>📡 Thông Tin WiFi</h4>
+              <h4>📡 {strings.wifiSecurity.wifiInfo}</h4>
               <div className="list-item">
                 <span className="list-item-icon">📶</span>
                 <div>
-                  <strong>SSID:</strong> {result.ssid}
+                  <strong>{strings.wifiSecurity.ssid}:</strong> {result.ssid}
                 </div>
               </div>
               <div className="list-item">
                 <span className="list-item-icon">🔒</span>
                 <div>
-                  <strong>Mật Khẩu:</strong> {result.password_strength}
+                  <strong>{strings.wifiSecurity.passwordStrength}:</strong> {result.password_strength}
                 </div>
               </div>
             </div>
 
             <div>
-              <h4>⚠️ Vấn Đề Phát Hiện</h4>
+              <h4>⚠️ {strings.wifiSecurity.issuesFound}</h4>
               {result.issues.map((issue, idx) => (
                 <div key={idx} className="recommendation critical">
                   ⚠️ {issue}
@@ -386,7 +451,7 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
             </div>
           </div>
 
-          <h4 style={{ marginTop: '2rem' }}>💡 Đề Xuất Cải Thiện</h4>
+          <h4 style={{ marginTop: '2rem' }}>💡 {strings.wifiSecurity.recommendations}</h4>
           {result.recommendations.map((rec, idx) => (
             <div key={idx} className="recommendation warning">
               💡 {rec}
@@ -399,7 +464,7 @@ export function WiFiSecurityChecker({ apiUrl, onCheck }) {
 }
 
 // Network Info Component
-export function NetworkInfo({ apiUrl }) {
+export function NetworkInfo({ apiUrl, strings }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -409,17 +474,20 @@ export function NetworkInfo({ apiUrl }) {
   }, []);
 
   const fetchNetworkInfo = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`${apiUrl}/api/scan/network-info`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
 
       if (data.success) {
         setInfo(data.data);
       } else {
-        setError(data.error || 'Failed to fetch network info');
+        setError(data.error || strings.networkInfo.error);
       }
     } catch (err) {
-      setError('Connection error: ' + err.message);
+      setError(strings.common.connectionError + ': ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -427,36 +495,36 @@ export function NetworkInfo({ apiUrl }) {
 
   if (loading) return <div className="card spinner"></div>;
   if (error) return <div className="card alert alert-error">{error}</div>;
-  if (!info) return <div className="card">Không có dữ liệu</div>;
+  if (!info) return <div className="card">{strings.networkInfo.noData}</div>;
 
   return (
     <div className="card">
-      <h2>ℹ️ Thông Tin Mạng</h2>
+      <h2>{strings.networkInfo.title}</h2>
 
       {info.system && (
         <div className="result-section">
-          <h3>💻 Thông Tin Hệ Thống</h3>
+          <h3>💻 {strings.networkInfo.systemInfo}</h3>
           <div className="list-item">
-            <span>📱 Platform:</span> <strong>{info.system.platform}</strong>
+            <span>📱 {strings.networkInfo.platform}:</span> <strong>{info.system.platform}</strong>
           </div>
           <div className="list-item">
-            <span>🖥️ Hostname:</span> <strong>{info.system.hostname}</strong>
+            <span>🖥️ {strings.networkInfo.hostname}:</span> <strong>{info.system.hostname}</strong>
           </div>
           <div className="list-item">
-            <span>⚡ CPU:</span> <strong>{info.system.cpu_percent.toFixed(1)}%</strong>
+            <span>⚡ {strings.networkInfo.cpu}:</span> <strong>{info.system.cpu_percent.toFixed(1)}%</strong>
           </div>
           <div className="list-item">
-            <span>🧠 Memory:</span> <strong>{info.system.memory_percent.toFixed(1)}%</strong>
+            <span>🧠 {strings.networkInfo.memory}:</span> <strong>{info.system.memory_percent.toFixed(1)}%</strong>
           </div>
           <div className="list-item">
-            <span>💾 Disk:</span> <strong>{info.system.disk_usage.toFixed(1)}%</strong>
+            <span>💾 {strings.networkInfo.disk}:</span> <strong>{info.system.disk_usage.toFixed(1)}%</strong>
           </div>
         </div>
       )}
 
       {info.interfaces && (
         <div className="result-section">
-          <h3>🌐 Network Interfaces</h3>
+          <h3>🌐 {strings.networkInfo.networkInterfaces}</h3>
           {Object.entries(info.interfaces).map(([name, addrs]) => (
             <div key={name} className="list-item">
               <div>
@@ -473,14 +541,14 @@ export function NetworkInfo({ apiUrl }) {
       )}
 
       <button onClick={fetchNetworkInfo} className="btn btn-secondary mt-3">
-        🔄 Làm Mới
+        {strings.networkInfo.refresh}
       </button>
     </div>
   );
 }
 
 // Scan History Component
-export function ScanHistory({ history }) {
+export function ScanHistory({ history, strings }) {
   const [filter, setFilter] = useState('all');
 
   const filtered = history.filter(h =>
@@ -489,16 +557,16 @@ export function ScanHistory({ history }) {
 
   return (
     <div className="card">
-      <h2>📜 Lịch Sử Quét</h2>
+      <h2>{strings.history.title}</h2>
 
       <div className="form-group">
-        <label>Lọc theo loại</label>
+        <label>{strings.history.filter}</label>
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">Tất Cả</option>
-          <option value="port_scan">Quét Cổng</option>
-          <option value="password_check">Kiểm Tra Mật Khẩu</option>
-          <option value="wifi_check">Kiểm Tra WiFi</option>
-          <option value="quick_audit">Quick Audit</option>
+          <option value="all">{strings.history.all}</option>
+          <option value="port_scan">{strings.history.portScan}</option>
+          <option value="password_check">{strings.history.passwordCheck}</option>
+          <option value="wifi_check">{strings.history.wifiCheck}</option>
+          <option value="quick_audit">{strings.history.quickAudit}</option>
         </select>
       </div>
 
@@ -507,9 +575,9 @@ export function ScanHistory({ history }) {
           <table className="history-table">
             <thead>
               <tr>
-                <th>Thời Gian</th>
-                <th>Loại</th>
-                <th>Chi Tiết</th>
+                <th>{strings.history.time}</th>
+                <th>{strings.history.type}</th>
+                <th>{strings.history.details}</th>
               </tr>
             </thead>
             <tbody>
@@ -524,9 +592,9 @@ export function ScanHistory({ history }) {
                     {' '}{item.type}
                   </td>
                   <td>
-                    {item.type === 'port_scan' && `${item.open_ports_count} cổng mở - Điểm: ${item.security_score}%`}
-                    {item.type === 'password_check' && `${item.strength} - Điểm: ${item.score}/10`}
-                    {item.type === 'wifi_check' && `${item.ssid} - Điểm: ${item.security_score}%`}
+                    {item.type === 'port_scan' && `${item.open_ports_count} ${strings.history.open} - ${strings.history.score}: ${item.security_score}%`}
+                    {item.type === 'password_check' && `${item.strength} - ${strings.history.score}: ${item.score}/10`}
+                    {item.type === 'wifi_check' && `${item.ssid} - ${strings.history.score}: ${item.security_score}%`}
                   </td>
                 </tr>
               ))}
@@ -534,14 +602,14 @@ export function ScanHistory({ history }) {
           </table>
         </div>
       ) : (
-        <p className="text-muted text-center mt-3">Chưa có lịch sử quét</p>
+        <p className="text-muted text-center mt-3">{strings.history.empty}</p>
       )}
     </div>
   );
 }
 
 // Dashboard Component
-export function Dashboard({ apiUrl }) {
+export function Dashboard({ apiUrl, strings }) {
   const [recommendations, setRecommendations] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -566,46 +634,46 @@ export function Dashboard({ apiUrl }) {
   return (
     <div>
       <div className="card">
-        <h2>📊 Bảng Điều Khiển An Ninh Mạng</h2>
-        <p>Quản lý và giám sát an ninh mạng cho gia đình của bạn</p>
+        <h2>{strings.dashboard.title}</h2>
+        <p>{strings.dashboard.subtitle}</p>
       </div>
 
       <div className="card">
-        <h3>🚀 Bắt Đầu Kiểm Toán</h3>
+        <h3>{strings.dashboard.startAudit}</h3>
         <div className="dashboard-grid">
           <div className="dashboard-card">
             <div className="dashboard-card-icon">🔍</div>
-            <div className="dashboard-card-title">Quét Cổng</div>
-            <div className="dashboard-card-desc">Tìm các cổng mở trên thiết bị</div>
+            <div className="dashboard-card-title">{strings.dashboard.portScanner}</div>
+            <div className="dashboard-card-desc">{strings.dashboard.portScannerDesc}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="dashboard-card-icon">🔐</div>
-            <div className="dashboard-card-title">Kiểm Tra Mật Khẩu</div>
-            <div className="dashboard-card-desc">Đánh giá độ mạnh mật khẩu</div>
+            <div className="dashboard-card-title">{strings.dashboard.passwordChecker}</div>
+            <div className="dashboard-card-desc">{strings.dashboard.passwordCheckerDesc}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="dashboard-card-icon">📡</div>
-            <div className="dashboard-card-title">WiFi Security</div>
-            <div className="dashboard-card-desc">Kiểm tra an ninh mạng WiFi</div>
+            <div className="dashboard-card-title">{strings.dashboard.wifiSecurity}</div>
+            <div className="dashboard-card-desc">{strings.dashboard.wifiSecurityDesc}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="dashboard-card-icon">ℹ️</div>
-            <div className="dashboard-card-title">Network Info</div>
-            <div className="dashboard-card-desc">Xem thông tin mạng chi tiết</div>
+            <div className="dashboard-card-title">{strings.dashboard.networkInfo}</div>
+            <div className="dashboard-card-desc">{strings.dashboard.networkInfoDesc}</div>
           </div>
         </div>
       </div>
 
       {recommendations && (
         <div className="card">
-          <h3>💡 Đề Xuất An Ninh</h3>
+          <h3>💡 {strings.dashboard.securityRecommendations}</h3>
 
           <div className="grid-2">
             <div>
-              <h4>🌐 Mạng</h4>
+              <h4>🌐 {strings.dashboard.network}</h4>
               {recommendations.network.map((rec, idx) => (
                 <div key={idx} className="recommendation warning">
                   💡 {rec}
@@ -614,7 +682,7 @@ export function Dashboard({ apiUrl }) {
             </div>
 
             <div>
-              <h4>🔓 Cổng</h4>
+              <h4>🔓 {strings.dashboard.ports}</h4>
               {recommendations.ports.map((rec, idx) => (
                 <div key={idx} className="recommendation warning">
                   💡 {rec}
@@ -623,7 +691,7 @@ export function Dashboard({ apiUrl }) {
             </div>
 
             <div>
-              <h4>🔐 Mật Khẩu</h4>
+              <h4>🔐 {strings.dashboard.passwords}</h4>
               {recommendations.passwords.map((rec, idx) => (
                 <div key={idx} className="recommendation warning">
                   💡 {rec}
@@ -632,7 +700,7 @@ export function Dashboard({ apiUrl }) {
             </div>
 
             <div>
-              <h4>🖥️ Thiết Bị</h4>
+              <h4>🖥️ {strings.dashboard.devices}</h4>
               {recommendations.devices.map((rec, idx) => (
                 <div key={idx} className="recommendation warning">
                   💡 {rec}
