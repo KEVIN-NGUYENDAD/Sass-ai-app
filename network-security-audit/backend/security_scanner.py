@@ -1,9 +1,7 @@
 import socket
 import re
 import string
-import nmap
 import psutil
-import subprocess
 import platform
 from typing import Dict, List, Tuple
 
@@ -259,9 +257,7 @@ class NetworkSecurityScanner:
                 info['network_stats'][interface] = {
                     'is_up': stats.isup,
                     'mtu': stats.mtu,
-                    'speed': stats.speed,
-                    'packets_sent': stats.packets_sent,
-                    'packets_recv': stats.packets_recv
+                    'speed': stats.speed
                 }
 
             # CPU & Memory
