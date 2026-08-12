@@ -1,0 +1,137 @@
+name: HARNESS_PROJECT_NAME
+description: HARNESS_PROJECT_DESC
+version: "1.0"
+
+# Environment setup
+environment:
+  runtime: python3.9+
+  package_manager: pip
+  shell: bash
+
+# Project structure - CUSTOMIZE FOR YOUR PROJECT
+structure:
+  source_dirs:
+    - app_dir          # 👈 Change this to your app directory
+    - src              # 👈 Add more if needed
+  test_dirs:
+    - tests
+  config_files:
+    - requirements.txt
+    - .env.example
+
+# Setup hooks - runs when setting up harness
+setup:
+  steps:
+    - name: "Install dependencies"
+      command: "pip install -r requirements.txt"
+      cwd: "."
+      required: true
+
+    - name: "Create data directory"
+      command: "mkdir -p data"
+      required: false
+
+    - name: "Setup environment variables"
+      command: "[ -f .env ] || cp .env.example .env"
+      required: false
+
+# Development commands
+commands:
+  dev:
+    - name: "start-server"
+      description: "Start Flask development server"
+      command: "python app.py"
+      cwd: "."
+      port: HARNESS_PORT
+      healthcheck: "http://localhost:HARNESS_PORT/"
+
+  test:
+    - name: "run-tests"
+      description: "Run unit tests"
+      command: "python -m pytest tests/ -v"
+      required: true
+
+    - name: "lint-code"
+      description: "Check code quality with flake8"
+      command: "python -m flake8 . --max-line-length=120 --exclude=venv"
+      required: false
+
+  deploy:
+    - name: "verify-deployment"
+      description: "Verify deployment readiness"
+      command: "bash scripts/verify-deployment.sh"
+      required: false
+
+# CI/CD pipeline
+pipeline:
+  stages:
+    - name: "lint"
+      commands:
+        - "python -m flake8 . --max-line-length=120 --exclude=venv"
+      on_failure: "warn"
+
+    - name: "test"
+      commands:
+        - "python -m pytest tests/ -v --cov"
+      on_failure: "fail"
+
+    - name: "build"
+      commands:
+        - "mkdir -p build"
+        - "cp -r app_dir build/"
+      on_failure: "fail"
+
+# Pre-commit hooks - run before commits
+hooks:
+  pre-commit:
+    - name: "check-syntax"
+      command: "python -m py_compile app.py"
+      on_failure: "warn"
+
+    - name: "lint-check"
+      command: "python -m flake8 app.py --max-line-length=120"
+      on_failure: "warn"
+
+# Code review configuration
+review:
+  checklist: "docs/CODE_REVIEW_CHECKLIST.md"
+  required_approval: 1
+  check_tests: true
+  check_lint: true
+
+# Deployment configuration
+deployment:
+  platform: "render"  # 👈 Change if using different platform
+  auto_deploy_branches:
+    - "main"
+    - "production"
+  verification_script: "scripts/verify-deployment.sh"
+  post_deploy:
+    - name: "health-check"
+      command: "curl -f $DEPLOY_URL/health || exit 1"
+
+# Environment variables
+env_vars:
+  FLASK_APP: "app.py"
+  FLASK_ENV: "development"
+  PYTHONUNBUFFERED: "1"
+  # 👈 Add your project-specific vars here
+
+# Development procedures
+procedures:
+  code_review: "docs/CODE_REVIEW_CHECKLIST.md"
+  qa_checklist: "docs/QA_CHECKLIST.md"
+  deployment: "docs/DEPLOYMENT_VERIFICATION.md"
+
+# Performance targets
+targets:
+  test_coverage: 80
+  performance_score: 95
+  response_time_ms: 500
+
+# Tags for organization
+tags:
+  - python
+  - flask
+  - web-app
+  - HARNESS_PROJECT_NAME    # 👈 Project-specific tag

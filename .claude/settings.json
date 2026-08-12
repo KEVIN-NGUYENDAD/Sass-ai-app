@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "project": "Huong Pharmacy AI Copilot",
+  "description": "Harness-enabled Flask project with automation",
+
+  "hooks": {
+    "on_session_start": {
+      "enabled": true,
+      "command": "echo '🚀 Harness ready! Run: harness dev start-server'",
+      "description": "Remind user harness is active on session start"
+    },
+
+    "on_file_save": {
+      "enabled": true,
+      "pattern": "nail_salon_checkin/*.py",
+      "command": "python -m py_compile ${file}",
+      "description": "Auto-check Python syntax on save"
+    }
+  },
+
+  "permissions": {
+    "bash": {
+      "commands": ["harness", "python", "pip", "git"]
+    },
+    "file_operations": {
+      "paths": [".claude/**", "nail_salon_checkin/**", "development-procedures/**"]
+    }
+  },
+
+  "aliases": {
+    "start": "harness dev start-server",
+    "test": "harness test run-tests",
+    "lint": "harness test lint-code",
+    "deploy": "harness deploy verify-deployment",
+    "setup": "bash scripts/setup-harness.sh"
+  },
+
+  "environment": {
+    "FLASK_APP": "app.py",
+    "FLASK_ENV": "development",
+    "PYTHONUNBUFFERED": "1"
+  }
+}
