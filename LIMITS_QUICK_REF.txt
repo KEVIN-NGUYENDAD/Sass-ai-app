@@ -1,0 +1,142 @@
+╔════════════════════════════════════════════════════════════════╗
+║           🚨 HẠN MỤC - QUICK REFERENCE CARD 🚨                 ║
+║         In ra để dán trên bàn làm việc của bạn!                ║
+╚════════════════════════════════════════════════════════════════╝
+
+📊 BẢNG NHANH - Hạn Mục Tất Cả Dịch Vụ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─ RENDER (Deployment) ─────────────────────────────────────────┐
+│ 🔴 COMPUTE: 5,000 min/tháng (VƯỢT = Services tắt!)            │
+│ 🟢 DISK: 100 GB (An toàn)                                     │
+│ 🟢 BANDWIDTH: Unlimited (An toàn)                             │
+│ 💰 Free tier: $0 | Starter: $7/service                        │
+│                                                               │
+│ ⚠️  HIỆN TẠI: Backend + Frontend = ~86,400 min/tháng          │
+│    → VƯỢT HẠN! Phải nâng Starter ($14/tháng)                 │
+└───────────────────────────────────────────────────────────────┘
+
+┌─ TWILIO (SMS) 🔴 NGUY HIỂM! ──────────────────────────────────┐
+│ ❌ KO CÓ HẠN MỤC! Tính PER SMS                                │
+│ 💰 Giá: $0.0075/SMS (gửi), $0.02/SMS (nhận)                   │
+│ 📊 Ước tính:                                                   │
+│    • 100 check-in = 200 SMS = $1.50/tháng                    │
+│    • 1000 check-in = 2000 SMS = $15/tháng                    │
+│    • 10000 check-in = 20000 SMS = $150/tháng ⚠️              │
+│                                                               │
+│ ⚠️  HIỆN TẠI: DISABLED (an toàn = $0)                         │
+│    Chỉ bật khi cần + rate limit!                             │
+└───────────────────────────────────────────────────────────────┘
+
+┌─ GITHUB (Repo + Actions) ─────────────────────────────────────┐
+│ 🟢 ACTIONS: 2,000 min/tháng (An toàn)                         │
+│ 🟢 STORAGE: 100 GB free (An toàn)                             │
+│ 💰 Free tier (public repo)                                    │
+│                                                               │
+│ ⚠️  HIỆN TẠI: ~45/2000 min (2% sử dụng) ✅                    │
+└───────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 KIỂM TRA HÀNG TUẦN (5 PHÚT - Thứ 2)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BƯỚC 1: RENDER (2 phút)
+┌─ Vào: https://dashboard.render.com/account/billing
+├─ Xem: Compute minutes vs 5000
+├─ Ghi: ____ / 5000 min
+└─ Nếu > 3000: ⚠️ NGUY HIỂM!
+
+BƯỚC 2: TWILIO (2 phút)
+┌─ Vào: https://www.twilio.com/console/billing
+├─ Xem: Estimated usage → Messaging
+├─ Ghi: $____ charges
+└─ Nếu > $0: ⚠️ CHECK LOGS!
+
+BƯỚC 3: GITHUB (1 phút)
+┌─ Vào: https://github.com/settings/billing
+├─ Xem: Actions → X of 2,000 minutes
+├─ Ghi: ____ / 2000 min
+└─ Nếu > 1500: 🟡 MONITOR
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆘 EMERGENCY - KHI VƯỢT HẠN MỤC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ RENDER COMPUTE VƯỢT 5000 MIN:
+   1. Render Dashboard → Chọn service
+   2. Chọn Plan: Starter
+   3. Thanh toán (add card)
+   4. App sẽ restart trong 2-5 phút
+
+❌ TWILIO CÓ CHARGE BẤT NGỜ:
+   1. Dashboard → Disable Twilio
+   2. Xóa TWILIO_ACCOUNT_SID từ .env
+   3. Redeploy Render
+   4. Liên hệ Twilio support → Refund?
+
+❌ GITHUB ACTIONS VƯỢT 2000 MIN:
+   1. Kiểm tra workflows có loop không
+   2. Optimize CI/CD
+   3. Kỳ tới: Upgrade GitHub Pro
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 TỔNG CHI PHÍ DỰ KIẾN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Scenario 1: Free Tier (Development)
+  Render:   $0 (nhưng chạy 24/7 sẽ vượt)
+  Twilio:   $0 (disabled)
+  GitHub:   $0
+  ─────────────────────
+  TỔNG:     $0 ✅
+
+Scenario 2: Production (Starter)
+  Render:   $14 (backend + frontend)
+  Twilio:   $0-10 (tuỳ check-in)
+  GitHub:   $0
+  ─────────────────────
+  TỔNG:     $14-24 ✅
+
+Scenario 3: Oops! Render Vượt + Twilio Enabled
+  Render:   $14 (upgrade forced)
+  Twilio:   $50+ (bị charge bất ngờ!)
+  GitHub:   $0
+  ─────────────────────
+  TỔNG:     $65+ 😱 ← TRÁNH!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📱 BOOKMARK NGAY (Lưu vào bookmark browser)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Render Dashboard:      https://dashboard.render.com
+Render Billing:        https://dashboard.render.com/account/billing
+Twilio Console:        https://www.twilio.com/console
+Twilio Billing:        https://www.twilio.com/console/billing
+GitHub Billing:        https://github.com/settings/billing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ PROTECTION STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Twilio disabled by default
+✅ Rate limiting active (100 req/hour)
+✅ .gitignore protecting .env files
+✅ Cost monitoring script setup
+✅ Security checklist created
+
+🔴 ACTION NEEDED:
+[ ] Bookmark all 3 dashboards
+[ ] Setup weekly check alarm (Thứ 2 10AM)
+[ ] Print this card & dán lên bàn
+[ ] Đọc LIMITS_DETAIL.md để hiểu rõ hơn
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Generated: 2026-08-12
+Last Updated: 2026-08-12
+Status: ✅ All systems protected
