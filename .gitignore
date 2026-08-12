@@ -1,3 +1,27 @@
 __pycache__/
 *.pyc
 nail_salon_checkin/data/
+
+# 🔒 Environment & Credentials
+.env.local
+.env.*.local
+.env.production.local
+**/.env.local
+
+# 🛡️ API Keys & Secrets
+**/secrets/
+**/*_key.txt
+**/*_secret.txt
+**/*_token.txt
+
+# 📊 Logs (may contain sensitive data)
+**/*.log
+logs/
+
+# 💾 Database backups
+**/*.db.backup
+**/*.sql.backup
+
+# 🧪 Test coverage
+.coverage
+htmlcov/
