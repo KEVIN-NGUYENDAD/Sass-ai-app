@@ -29,38 +29,44 @@ jobs:
           
           if [ -z "$BACKEND_ID" ] || [ "$BACKEND_ID" = "null" ]; then
             echo "📦 Creating new backend service..."
+
+            PAYLOAD=$(jq -n \
+              --arg type "web_service" \
+              --arg name "network-security-audit-backend" \
+              --arg ownerId "$OWNER_ID" \
+              --arg repo "$NEW_REPO" \
+              --arg branch "main" \
+              --arg rootDir "network-security-audit/backend" \
+              --arg runtime "python" \
+              --arg plan "free" \
+              --arg region "oregon" \
+              --arg buildCommand "pip install -r requirements.txt" \
+              --arg startCommand "gunicorn app:app" \
+              '{
+                type: $type,
+                name: $name,
+                ownerId: $ownerId,
+                repo: $repo,
+                branch: $branch,
+                rootDir: $rootDir,
+                runtime: $runtime,
+                plan: $plan,
+                region: $region,
+                serviceDetails: {
+                  buildCommand: $buildCommand,
+                  startCommand: $startCommand
+                },
+                envVars: [
+                  {key: "FLASK_ENV", value: "production"},
+                  {key: "DEBUG", value: "False"},
+                  {key: "CORS_ORIGINS", value: "https://network-security-audit-frontend.onrender.com"}
+                ]
+              }')
+
             CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
               -H "Authorization: Bearer $RENDER_API_KEY" \
               -H "Content-Type: application/json" \
-              -d '{
-                "type": "web_service",
-                "name": "network-security-audit-backend",
-                "ownerId": "'"$OWNER_ID"'",
-                "repo": "'"$NEW_REPO"'",
-                "branch": "main",
-                "rootDir": "network-security-audit/backend",
-                "runtime": "python",
-                "plan": "free",
-                "region": "oregon",
-                "serviceDetails": {
-                  "buildCommand": "pip install -r requirements.txt",
-                  "startCommand": "gunicorn app:app"
-                },
-                "envVars": [
-                  {
-                    "key": "FLASK_ENV",
-                    "value": "production"
-                  },
-                  {
-                    "key": "DEBUG",
-                    "value": "False"
-                  },
-                  {
-                    "key": "CORS_ORIGINS",
-                    "value": "https://network-security-audit-frontend.onrender.com"
-                  }
-                ]
-              }')
+              -d "$PAYLOAD")
             
             CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
             CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
