@@ -74,36 +74,50 @@ X-API-Token: <your-token>
 
 ### Health Check
 - `GET /api/health` - Check if backend is running (no auth required)
+  - 📊 Rate limit: 60/minute
 
 ### Port Scanning
 - `POST /api/scan/ports` - Scan open ports (🔐 auth required)
   - ⚠️ Target restricted to localhost/127.0.0.1
+  - 📊 Rate limit: 5/minute
+  - ✅ Input validation: hostname + port range
   - Body: `{ target: "localhost", ports: "1-1000" }`
   - Returns: 403 Forbidden if target is not localhost
 
 ### Password Strength
 - `POST /api/scan/password` - Check password strength (🔐 auth required)
+  - 📊 Rate limit: 10/minute
+  - ✅ Input validation: password length 1-128 chars
   - Body: `{ password: "MyPassword123!" }`
 
 ### WiFi Security
 - `POST /api/scan/wifi-security` - Check WiFi security (🔐 auth required)
+  - 📊 Rate limit: 8/minute
+  - ✅ Input validation: SSID ≤32 chars, password 1-128 chars
   - Body: `{ ssid: "MyWiFi", password: "MyPassword123!" }`
 
 ### Network Info
 - `GET /api/scan/network-info` - Get network information (🔐 auth required)
+  - 📊 Rate limit: 20/minute
   - Limited data (hostname, OS only) to prevent information disclosure
 
 ### Scan History
 - `GET /api/scan/history` - Get scan history (🔐 auth required)
+  - 📊 Rate limit: 30/minute
+  - ✅ Query validation: limit parameter clamped 1-500
 - `POST /api/scan/clear-history` - Clear history (🔐 auth required)
+  - 📊 Rate limit: 5/minute
 
 ### Quick Audit
 - `POST /api/scan/quick-audit` - Run quick security audit (🔐 auth required)
   - ⚠️ Audit restricted to localhost/127.0.0.1
+  - 📊 Rate limit: 3/minute (strictest - heavy operation)
+  - ✅ Input validation: hostname
   - Returns: 403 Forbidden if target is not localhost
 
 ### Recommendations
 - `GET /api/recommendations` - Get security recommendations (public, no auth required)
+  - 📊 Rate limit: 30/minute
 
 ## Development
 
@@ -153,6 +167,17 @@ npm run build
   - Content-Security-Policy: Restricts script and style sources
 - **Authentication Required**: All scan endpoints require API token
 - **Information Disclosure Control**: Network information endpoint restricted to authenticated users
+
+### 🟠 CRITICAL DoS Prevention
+- **Rate Limiting**: flask-limiter on all endpoints prevents DoS attacks
+  - Health check: 60 per minute
+  - Scan operations: 3-10 per minute (stricter for resource-heavy ops)
+  - Read operations: 20-30 per minute
+- **Input Validation**: Regex-based whitelist validation on all inputs
+  - Port ranges: digits/commas/dashes only
+  - Hostnames: alphanumeric + dots/dashes, max 255 chars
+  - Passwords: 1-128 character length
+  - WiFi SSID: max 32 characters (WiFi standard)
 
 ### 🟡 Frontend Security
 - **HTTPS Enforcement**: Application redirects to HTTPS on non-localhost deployments
