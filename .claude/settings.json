@@ -1,4 +1,14 @@
 {
+  "enabledPlugins": {
+    "run@anthropics/skills": true,
+    "code-review@anthropics/skills": true,
+    "dataviz@anthropics/skills": true,
+    "xlsx@anthropics/skills": true,
+    "pdf@anthropics/skills": true,
+    "docx@anthropics/skills": true,
+    "claude-api@anthropics/skills": true,
+    "mcp@anthropics/skills": true
+  },
   "hooks": {
     "SessionStart": [
       {
