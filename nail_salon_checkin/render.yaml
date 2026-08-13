@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: nail-salon-checkin
+    env: python3
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OWNER_PHONE
+        value: "+16237604999"
+    autoDeploy: true
