@@ -1,3 +1,6 @@
-flask
+flask>=2.3.0
+flask-limiter>=3.5.0
 gunicorn
 twilio
+werkzeug>=2.3.0
+bleach>=6.0.0

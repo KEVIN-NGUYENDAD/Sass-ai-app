@@ -15,10 +15,21 @@ import uuid
 from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, render_template, request, session, redirect
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from bleach import clean
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 logger = logging.getLogger("nail_salon_checkin")
+
+# Security: Rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 
 # Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
 
@@ -34,7 +45,10 @@ DURATION_OPTIONS = (30, 45, 60)  # minutes the owner can confirm a service will 
 
 OWNER_PHONE = os.environ.get("OWNER_PHONE", "+16237604999")
 BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checkin.onrender.com
-STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD", "250618")
+
+# Security: Hash staff password (generate hash from env or default)
+_default_password = os.environ.get("STAFF_PASSWORD", "ChangeMe123!")
+STAFF_PASSWORD_HASH = generate_password_hash(_default_password)
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -95,6 +109,14 @@ def get_base_url():
     if root.startswith("http://") and "localhost" not in root and "127.0.0.1" not in root:
         root = "https://" + root[len("http://"):]
     return root
+
+
+def sanitize_input(text):
+    """Sanitize user input to prevent XSS attacks."""
+    if not text:
+        return ""
+    # Remove HTML tags and entities
+    return clean(str(text), tags=[], strip=True)
 
 
 def format_time_12h(t):
@@ -193,6 +215,29 @@ def slot_occupancy(checkins, date_str):
     return occupancy
 
 
+# --- Security Middleware ---------------------------------------------------
+@app.before_request
+def security_before_request():
+    """Enforce HTTPS in production and log requests."""
+    if os.environ.get("FLASK_ENV") == "production" and not request.is_secure:
+        # Redirect to HTTPS
+        url = request.url.replace("http://", "https://", 1)
+        return redirect(url, code=301)
+    logger.info(f"{request.method} {request.path} from {request.remote_addr}")
+
+
+@app.after_request
+def security_headers(response):
+    """Add security headers to all responses."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    return response
+
+
 # --- Routes: pages --------------------------------------------------------
 @app.route("/")
 def checkin_page():
@@ -211,12 +256,18 @@ def staff_login_page():
 
 
 @app.route("/api/staff-login", methods=["POST"])
+@limiter.limit("5 per minute")  # Prevent brute force
 def api_staff_login():
     data = request.get_json(silent=True) or {}
     password = data.get("password", "").strip()
-    if password == STAFF_PASSWORD:
+
+    # Security: Use secure hash comparison
+    if check_password_hash(STAFF_PASSWORD_HASH, password):
         session["staff_authenticated"] = True
+        logger.info(f"Staff login successful from {request.remote_addr}")
         return jsonify({"success": True}), 200
+
+    logger.warning(f"Failed staff login attempt from {request.remote_addr}")
     return jsonify({"error": "Incorrect password"}), 401
 
 
@@ -271,14 +322,15 @@ def api_slots():
 
 
 @app.route("/api/checkin", methods=["POST"])
+@limiter.limit("20 per hour")  # Public endpoint - rate limited
 def api_checkin():
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name = sanitize_input((data.get("name") or "").strip())
     phone = (data.get("phone") or "").strip()
     date_str = (data.get("date") or "").strip()
     time_str = (data.get("time") or "").strip()
-    service_note = (data.get("service_note") or "").strip()
-    nickname = (data.get("nickname") or "").strip()
+    service_note = sanitize_input((data.get("service_note") or "").strip())
+    nickname = sanitize_input((data.get("nickname") or "").strip())
 
     if not name:
         return jsonify({"error": "Name is required"}), 400
@@ -342,6 +394,7 @@ def api_checkins():
 
 
 @app.route("/api/checkins/<checkin_id>/status", methods=["POST"])
+@limiter.limit("30 per hour")
 def api_update_status(checkin_id):
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
@@ -362,6 +415,7 @@ def api_update_status(checkin_id):
 
 
 @app.route("/api/checkins/<checkin_id>/confirm-duration", methods=["POST"])
+@limiter.limit("30 per hour")
 def api_confirm_duration(checkin_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -413,6 +467,7 @@ def owner_confirm_page(checkin_id):
 
 
 @app.route("/api/owner/confirm/<checkin_id>", methods=["POST"])
+@limiter.limit("10 per hour")
 def api_owner_confirm(checkin_id):
     data = request.get_json(silent=True) or {}
     token = data.get("token", "")
@@ -446,13 +501,14 @@ def api_owner_confirm(checkin_id):
 
 
 @app.route("/api/checkin-by-staff", methods=["POST"])
+@limiter.limit("30 per hour")
 def api_checkin_by_staff():
     data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    name = sanitize_input((data.get("name") or "").strip())
     phone = (data.get("phone") or "").strip()
     date_str = (data.get("date") or "").strip()
     time_str = (data.get("time") or "").strip()
-    service_note = (data.get("service_note") or "").strip()
+    service_note = sanitize_input((data.get("service_note") or "").strip())
     duration_minutes = data.get("duration_minutes")
 
     if not name:
@@ -534,6 +590,7 @@ def get_daily_report():
 
 
 @app.route("/api/daily-report", methods=["POST"])
+@limiter.limit("30 per hour")
 def save_daily_report():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -618,6 +675,7 @@ def get_customer_history():
 
 
 @app.route("/api/send-checkin-link", methods=["POST"])
+@limiter.limit("20 per hour")
 def send_checkin_link():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -638,6 +696,7 @@ def send_checkin_link():
 
 
 @app.route("/api/send-bulk-sms", methods=["POST"])
+@limiter.limit("10 per hour")
 def send_bulk_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -825,13 +884,14 @@ def get_customers():
 
 
 @app.route("/api/customers/<phone>/update", methods=["POST"])
+@limiter.limit("30 per hour")
 def update_customer(phone):
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
-    nickname = (data.get("nickname") or "").strip()
-    note = (data.get("note") or "").strip()
+    nickname = sanitize_input((data.get("nickname") or "").strip())
+    note = sanitize_input((data.get("note") or "").strip())
 
     with _lock:
         full_data = _load_data()
@@ -982,6 +1042,7 @@ def export_monthly_summary():
 
 
 @app.route("/api/send-summary-sms", methods=["POST"])
+@limiter.limit("20 per hour")
 def send_summary_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
