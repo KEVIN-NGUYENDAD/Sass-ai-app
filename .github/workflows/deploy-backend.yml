@@ -29,27 +29,8 @@ jobs:
             echo ""
             echo "📦 Creating new backend service..."
 
-            # Build JSON payload with serviceDetails required for web_service type
-            PAYLOAD=$(printf '{
-              "type": "web_service",
-              "name": "network-security-audit-backend",
-              "ownerId": "%s",
-              "repo": "https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend",
-              "branch": "main",
-              "rootDir": "network-security-audit/backend",
-              "runtime": "python",
-              "plan": "free",
-              "region": "oregon",
-              "serviceDetails": {
-                "buildCommand": "pip install -r requirements.txt",
-                "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT"
-              },
-              "envVars": [
-                {"key": "FLASK_ENV", "value": "production"},
-                {"key": "DEBUG", "value": "False"},
-                {"key": "CORS_ORIGINS", "value": "https://network-security-audit-frontend.onrender.com"}
-              ]
-            }' "$OWNER_ID")
+            # Build compact JSON payload - Render API may have issues with formatted JSON
+            PAYLOAD="{\"type\":\"web_service\",\"name\":\"network-security-audit-backend\",\"ownerId\":\"$OWNER_ID\",\"repo\":\"https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend\",\"branch\":\"main\",\"rootDir\":\"network-security-audit/backend\",\"runtime\":\"python\",\"plan\":\"free\",\"region\":\"oregon\",\"serviceDetails\":{\"buildCommand\":\"pip install -r requirements.txt\",\"startCommand\":\"gunicorn app:app --bind 0.0.0.0:\$PORT\"},\"envVars\":[{\"key\":\"FLASK_ENV\",\"value\":\"production\"},{\"key\":\"DEBUG\",\"value\":\"False\"},{\"key\":\"CORS_ORIGINS\",\"value\":\"https://network-security-audit-frontend.onrender.com\"}]}"
 
             echo "Payload:"
             echo "$PAYLOAD" | jq . 2>/dev/null || echo "$PAYLOAD"
