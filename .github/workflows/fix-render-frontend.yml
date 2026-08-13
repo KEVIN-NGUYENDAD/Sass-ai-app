@@ -1,0 +1,56 @@
+name: Fix Render Frontend Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete broken frontend and create new Static Site
+        run: |
+          RENDER_API_KEY="${{ secrets.RENDER_API_KEY }}"
+          NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
+
+          echo "🔍 Fetching services..."
+          SERVICES=$(curl -s -X GET "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer $RENDER_API_KEY")
+
+          FRONTEND_ID=$(echo "$SERVICES" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .id' 2>/dev/null)
+
+          echo "Frontend ID: $FRONTEND_ID"
+          echo ""
+
+          if [ ! -z "$FRONTEND_ID" ] && [ "$FRONTEND_ID" != "null" ]; then
+            echo "🗑️  Deleting broken frontend..."
+            curl -s -X DELETE "https://api.render.com/v1/services/$FRONTEND_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY" > /dev/null
+            echo "✅ Deleted"
+            sleep 15
+          fi
+
+          echo "📦 Creating new Static Site frontend..."
+          curl -s -X POST "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "static_site",
+              "name": "network-security-audit-frontend",
+              "repo": "'"$NEW_REPO"'",
+              "branch": "main",
+              "rootDir": "network-security-audit/frontend",
+              "buildCommand": "npm install && npm run build",
+              "publishPath": "build",
+              "plan": "free",
+              "region": "oregon",
+              "envVars": [
+                {
+                  "key": "REACT_APP_API_URL",
+                  "value": "https://network-security-audit-backend.onrender.com"
+                }
+              ]
+            }' > /dev/null
+
+          echo "✅ Frontend created"
+          echo ""
+          echo "✨ Done! Check https://dashboard.render.com in 2-3 minutes"
