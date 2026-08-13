@@ -89,7 +89,7 @@ jobs:
               -H "Content-Type: application/json" \
               -d '{
                 "serviceDetails": {
-                  "buildCommand": "cd network-security-audit/frontend && npm install && npm run build",
+                  "buildCommand": "npm install && npm run build",
                   "publishPath": "build"
                 }
               }')
