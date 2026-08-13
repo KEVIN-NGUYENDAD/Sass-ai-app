@@ -2,14 +2,20 @@ name: Fix Render Frontend Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      render_api_key:
+        description: 'Render API Key'
+        required: true
+        type: string
 
 jobs:
   fix-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Delete broken frontend and create new Static Site
+        env:
+          RENDER_API_KEY: ${{ inputs.render_api_key }}
         run: |
-          RENDER_API_KEY="${{ secrets.RENDER_API_KEY }}"
           NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
 
           echo "🔍 Fetching services..."
@@ -53,4 +59,4 @@ jobs:
 
           echo "✅ Frontend created"
           echo ""
-          echo "✨ Done! Check https://dashboard.render.com in 2-3 minutes"
+          echo "✨ Done! Render deploying (2-3 minutes)..."
