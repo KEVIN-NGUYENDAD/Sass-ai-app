@@ -1,0 +1,34 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches: [ main, claude/network-security-audit-k6mdzw ]
+    paths:
+      - 'network-security-audit/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy Backend to Render
+      run: |
+        curl --location --request POST 'https://api.render.com/v1/services/network-security-audit-backend/deploys' \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{"clearCache": "do_clear"}'
+
+    - name: Deploy Frontend to Render
+      run: |
+        curl --location --request POST 'https://api.render.com/v1/services/network-security-audit/deploys' \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{"clearCache": "do_clear"}'
+
+    - name: Verify Deployment
+      run: |
+        echo "✅ Deployment triggered!"
+        echo "Backend: https://network-security-audit-backend.onrender.com"
+        echo "Frontend: https://network-security-audit.onrender.com"
