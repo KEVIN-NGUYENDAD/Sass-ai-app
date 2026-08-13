@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: network-security-audit-backend
+    env: python
+    plan: free
+    rootDir: network-security-audit/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: API_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+    autoDeploy: true
+
+  - type: static_site
+    name: network-security-audit
+    env: react
+    plan: free
+    rootDir: network-security-audit/frontend
+    buildCommand: npm install && npm run build
+    publishDirectory: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://network-security-audit-backend.onrender.com
+    autoDeploy: true
