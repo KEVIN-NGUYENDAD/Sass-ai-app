@@ -1,0 +1,65 @@
+name: Deploy Nail Salon Check-In to Render
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'nail_salon_checkin/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          echo "🚀 Deploying Nail Salon Check-In to Render..."
+          echo ""
+
+          # Try to deploy to existing service
+          DEPLOY_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST 'https://api.render.com/v1/services/nail-salon-checkin/deploys' \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_clear"}')
+
+          DEPLOY_HTTP=$(echo "$DEPLOY_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          DEPLOY_BODY=$(echo "$DEPLOY_RESPONSE" | sed '$d')
+
+          echo "Deploy Response Status: $DEPLOY_HTTP"
+          echo "Deploy Response Body:"
+          echo "$DEPLOY_BODY" | jq . 2>/dev/null || echo "$DEPLOY_BODY"
+
+          if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
+            echo ""
+            echo "✅ Deployment triggered!"
+          elif echo "$DEPLOY_HTTP" | grep -q "404"; then
+            echo ""
+            echo "⚠️  Service 'nail-salon-checkin' not found on Render"
+            echo "📝 To deploy, create a service on Render dashboard:"
+            echo "   - Name: nail-salon-checkin"
+            echo "   - Type: Web Service"
+            echo "   - GitHub Repo: kevin-nguyendad/huong-pharmacy-ai-copilot"
+            echo "   - Branch: main"
+            echo "   - Root Directory: nail_salon_checkin"
+            echo "   - Runtime: Python"
+            echo "   - Build Command: pip install -r requirements.txt"
+            echo "   - Start Command: gunicorn app:app --bind 0.0.0.0:\$PORT"
+            echo ""
+            echo "Then set environment variables:"
+            echo "   - FLASK_ENV: production"
+            echo "   - SECRET_KEY: (generate a secure random key)"
+            echo "   - TWILIO_* variables (if using SMS)"
+            exit 1
+          else
+            echo ""
+            echo "⚠️  Deployment request returned status $DEPLOY_HTTP"
+            exit 1
+          fi
+
+          echo ""
+          echo "Service URL: https://nail-salon-checkin.onrender.com"
