@@ -2,11 +2,6 @@ name: Fix Render Frontend Deployment
 
 on:
   workflow_dispatch:
-    inputs:
-      render_api_key:
-        description: 'Render API Key'
-        required: true
-        type: string
 
 jobs:
   fix-frontend:
@@ -14,7 +9,7 @@ jobs:
     steps:
       - name: Delete broken frontend and create new Static Site
         env:
-          RENDER_API_KEY: ${{ inputs.render_api_key }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
 
