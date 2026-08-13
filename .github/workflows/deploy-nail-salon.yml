@@ -6,6 +6,7 @@ on:
     branches: [ main ]
     paths:
       - 'nail_salon_checkin/**'
+      - '.github/workflows/deploy-nail-salon.yml'
 
 jobs:
   deploy:
@@ -14,52 +15,101 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
       - name: Deploy to Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-        run: |
-          echo "🚀 Deploying Nail Salon Check-In to Render..."
-          echo ""
+        run: python3 << 'EOF'
+import os
+import requests
+import json
+import time
 
-          # Try to deploy to existing service
-          DEPLOY_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST 'https://api.render.com/v1/services/nail-salon-checkin/deploys' \
-            -H "Authorization: Bearer $RENDER_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"clearCache": "do_clear"}')
+def log(msg, level="INFO"):
+    symbols = {"INFO": "ℹ️", "SUCCESS": "✅", "ERROR": "❌", "WARN": "⚠️"}
+    print(f"{symbols.get(level, level)} {msg}")
 
-          DEPLOY_HTTP=$(echo "$DEPLOY_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-          DEPLOY_BODY=$(echo "$DEPLOY_RESPONSE" | sed '$d')
+api_key = os.environ.get("RENDER_API_KEY")
+if not api_key:
+    log("RENDER_API_KEY not set", "ERROR")
+    exit(1)
 
-          echo "Deploy Response Status: $DEPLOY_HTTP"
-          echo "Deploy Response Body:"
-          echo "$DEPLOY_BODY" | jq . 2>/dev/null || echo "$DEPLOY_BODY"
+base_url = "https://api.render.com/v1"
+service_name = "nail-salon-checkin"
+headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-          if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
-            echo ""
-            echo "✅ Deployment triggered!"
-          elif echo "$DEPLOY_HTTP" | grep -q "404"; then
-            echo ""
-            echo "⚠️  Service 'nail-salon-checkin' not found on Render"
-            echo "📝 To deploy, create a service on Render dashboard:"
-            echo "   - Name: nail-salon-checkin"
-            echo "   - Type: Web Service"
-            echo "   - GitHub Repo: kevin-nguyendad/huong-pharmacy-ai-copilot"
-            echo "   - Branch: main"
-            echo "   - Root Directory: nail_salon_checkin"
-            echo "   - Runtime: Python"
-            echo "   - Build Command: pip install -r requirements.txt"
-            echo "   - Start Command: gunicorn app:app --bind 0.0.0.0:\$PORT"
-            echo ""
-            echo "Then set environment variables:"
-            echo "   - FLASK_ENV: production"
-            echo "   - SECRET_KEY: (generate a secure random key)"
-            echo "   - TWILIO_* variables (if using SMS)"
-            exit 1
-          else
-            echo ""
-            echo "⚠️  Deployment request returned status $DEPLOY_HTTP"
-            exit 1
-          fi
+log("Step 1: Creating or finding service...")
 
-          echo ""
-          echo "Service URL: https://nail-salon-checkin.onrender.com"
+# Try to create service
+create_payload = {
+    "name": service_name,
+    "type": "web_service",
+    "repo": "https://github.com/kevin-nguyendad/huong-pharmacy-ai-copilot",
+    "branch": "main",
+    "rootDir": "nail_salon_checkin",
+    "runtime": "python3",
+    "buildCommand": "pip install -r requirements.txt",
+    "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT",
+    "autoDeploy": "yes"
+}
+
+try:
+    response = requests.post(f"{base_url}/services", json=create_payload, headers=headers, timeout=30)
+    if response.status_code == 201:
+        log(f"Service created: {service_name}", "SUCCESS")
+    elif response.status_code == 409:
+        log("Service already exists", "WARN")
+    else:
+        log(f"Create failed (HTTP {response.status_code}): {response.text[:200]}", "WARN")
+except Exception as e:
+    log(f"Create error: {str(e)}", "WARN")
+
+time.sleep(3)
+
+log("Step 2: Triggering deployment...")
+
+try:
+    response = requests.post(
+        f"{base_url}/services/{service_name}/deploys",
+        json={"clearCache": "do_clear"},
+        headers=headers,
+        timeout=30
+    )
+    if response.status_code in [200, 201]:
+        log("Deployment triggered!", "SUCCESS")
+    else:
+        log(f"Deploy status: HTTP {response.status_code}", "INFO")
+except Exception as e:
+    log(f"Deploy trigger error: {str(e)}", "WARN")
+
+log("Waiting for app to start...", "INFO")
+time.sleep(3)
+
+log("Step 3: Checking app status...", "INFO")
+
+for attempt in range(30):
+    try:
+        response = requests.get(f"https://{service_name}.onrender.com/health", timeout=5)
+        if response.status_code == 200:
+            log("🎉 APP IS LIVE!", "SUCCESS")
+            print(f"\n✅ Deployment successful!")
+            print(f"🌐 URL: https://{service_name}.onrender.com")
+            print(f"🔐 Staff: https://{service_name}.onrender.com/staff-login")
+            exit(0)
+    except:
+        pass
+
+    if (attempt + 1) % 10 == 0:
+        log(f"Waiting... ({(attempt+1)*2}s)", "INFO")
+    time.sleep(2)
+
+log("Deployment in progress (may take 2-5 minutes)", "INFO")
+print(f"\n📊 Monitor at: https://dashboard.render.com/services/{service_name}")
+EOF
