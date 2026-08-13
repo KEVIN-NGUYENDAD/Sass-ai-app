@@ -1,15 +1,17 @@
 services:
   - type: web
-    name: huong-pharmacy-ai-copilot
-    env: python
+    name: network-security-audit-backend
+    runtime: python
+    rootDir: network-security-audit/backend
+    repo: https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend
+    region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-
-  - type: web
-    name: nail-salon-checkin
-    env: python
-    plan: free
-    rootDir: nail_salon_checkin
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: CORS_ORIGINS
+        value: https://network-security-audit-frontend.onrender.com
