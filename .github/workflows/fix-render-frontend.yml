@@ -77,13 +77,35 @@ jobs:
           echo ""
 
           if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
-            echo "✅ Frontend service created successfully"
-            SERVICE_ID=$(echo "$CREATE_BODY" | jq -r '.id' 2>/dev/null)
+            echo "✅ Frontend service created"
+            SERVICE_ID=$(echo "$CREATE_BODY" | jq -r '.service.id' 2>/dev/null)
             echo "Service ID: $SERVICE_ID"
+
+            # Update service with correct build settings
+            echo ""
+            echo "⚙️ Updating build settings..."
+            UPDATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PATCH "https://api.render.com/v1/services/$SERVICE_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "serviceDetails": {
+                  "buildCommand": "cd network-security-audit/frontend && npm install && npm run build",
+                  "publishPath": "build"
+                }
+              }')
+
+            UPDATE_HTTP=$(echo "$UPDATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            echo "Update Response Status: $UPDATE_HTTP"
+
+            if [ "$UPDATE_HTTP" = "200" ]; then
+              echo "✅ Build settings updated"
+            else
+              echo "⚠️ Update status: $UPDATE_HTTP"
+            fi
           else
             echo "❌ Failed to create frontend service"
             exit 1
           fi
 
           echo ""
-          echo "✨ Done! Render deploying (2-3 minutes)..."
+          echo "✨ Done! Render deploying (3-5 minutes)..."
