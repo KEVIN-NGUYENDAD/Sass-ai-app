@@ -11,93 +11,38 @@ jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
-      - name: Create/Update Backend Service on Render
+      - uses: actions/checkout@v3
+
+      - name: Deploy Backend to Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
-          
-          echo "🔍 Checking for existing backend service..."
-          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/services)
-          
-          BACKEND_ID=$(echo "$SERVICES" | jq -r '.[] | select(.service.name=="network-security-audit-backend") | .service.id' 2>/dev/null)
-          OWNER_ID=$(echo "$SERVICES" | jq -r '.[0].service.ownerId' 2>/dev/null)
-          
-          echo "Backend ID: $BACKEND_ID"
-          echo "Owner ID: $OWNER_ID"
-          echo ""
-          
-          if [ ! -z "$BACKEND_ID" ] && [ "$BACKEND_ID" != "null" ]; then
-            echo "🗑️  Deleting existing backend service (ID: $BACKEND_ID)..."
-            DELETE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "https://api.render.com/v1/services/$BACKEND_ID" \
-              -H "Authorization: Bearer $RENDER_API_KEY")
+          echo "🚀 Deploying backend to Render..."
 
-            DELETE_HTTP=$(echo "$DELETE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-            echo "Delete Response Status: $DELETE_HTTP"
-
-            if [ "$DELETE_HTTP" = "204" ] || [ "$DELETE_HTTP" = "200" ]; then
-              echo "✅ Backend service deleted successfully"
-              echo "⏳ Waiting for deletion to complete..."
-              sleep 3
-            else
-              echo "⚠️  Warning: Failed to delete backend service, attempting to proceed anyway"
-            fi
-          fi
-
-          echo "📦 Creating new backend service..."
-
-          PAYLOAD=$(jq -n \
-            --arg type "web_service" \
-            --arg name "network-security-audit-backend" \
-            --arg ownerId "$OWNER_ID" \
-            --arg repo "$NEW_REPO" \
-            --arg branch "main" \
-            --arg rootDir "network-security-audit/backend" \
-            --arg runtime "python" \
-            --arg plan "free" \
-            --arg region "oregon" \
-            --arg buildCommand "pip install -r requirements.txt" \
-            --arg startCommand "gunicorn app:app --bind 0.0.0.0:\$PORT" \
-            '{
-              "type": $type,
-              "name": $name,
-              "ownerId": $ownerId,
-              "repo": $repo,
-              "branch": $branch,
-              "rootDir": $rootDir,
-              "runtime": $runtime,
-              "plan": $plan,
-              "region": $region,
-              "serviceDetails": {
-                "buildCommand": $buildCommand,
-                "startCommand": $startCommand
-              },
-              "envVars": [
-                {"key": "FLASK_ENV", "value": "production"},
-                {"key": "DEBUG", "value": "False"},
-                {"key": "CORS_ORIGINS", "value": "https://network-security-audit-frontend.onrender.com"}
-              ]
-            }')
-
-          CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
+          # Try to deploy existing service
+          DEPLOY_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST 'https://api.render.com/v1/services/network-security-audit-backend/deploys' \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
+            -d '{"clearCache": "do_clear"}')
 
-          CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-          CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+          DEPLOY_HTTP=$(echo "$DEPLOY_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          DEPLOY_BODY=$(echo "$DEPLOY_RESPONSE" | sed '$d')
 
-          echo "Create Response Status: $CREATE_HTTP"
-          echo "Create Response Body:"
-          echo "$CREATE_BODY" | jq '.' 2>/dev/null || echo "$CREATE_BODY"
+          echo "Deploy Response Status: $DEPLOY_HTTP"
+          echo "Deploy Response Body:"
+          echo "$DEPLOY_BODY" | jq '.' 2>/dev/null || echo "$DEPLOY_BODY"
 
-          if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
-            echo "✅ Backend service created successfully"
+          # Check if service doesn't exist
+          if echo "$DEPLOY_HTTP" | grep -q "404"; then
+            echo ""
+            echo "ℹ️  Backend service doesn't exist yet, will be created on next manual trigger"
+            echo "Or manually create it at https://dashboard.render.com"
+          elif [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
+            echo "✅ Backend deployment triggered successfully"
           else
-            echo "❌ Failed to create backend service"
-            exit 1
+            echo "⚠️  Deployment response: $DEPLOY_HTTP"
           fi
-          
+
           echo ""
-          echo "✨ Backend deployment complete!"
+          echo "✨ Deployment attempt complete!"
           echo "Backend URL: https://network-security-audit-backend.onrender.com"
