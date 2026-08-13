@@ -44,17 +44,13 @@ jobs:
               "name": "network-security-audit-frontend",
               "repo": "'"$NEW_REPO"'",
               "branch": "main",
-              "rootDir": "network-security-audit/frontend",
-              "buildCommand": "npm install && npm run build",
-              "publishPath": "build",
+              "buildCommand": "cd network-security-audit/frontend && npm install && npm run build",
+              "publishPath": "network-security-audit/frontend/build",
               "plan": "free",
               "region": "oregon",
-              "envVars": [
-                {
-                  "key": "REACT_APP_API_URL",
-                  "value": "https://network-security-audit-backend.onrender.com"
-                }
-              ]
+              "envVars": {
+                "REACT_APP_API_URL": "https://network-security-audit-backend.onrender.com"
+              }
             }' > /dev/null
 
           echo "✅ Frontend created"
