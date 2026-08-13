@@ -1,0 +1,111 @@
+name: Fix Render Frontend Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete broken frontend and create new Static Site
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
+
+          echo "🔍 Fetching services..."
+          SERVICES=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X GET "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer $RENDER_API_KEY")
+
+          HTTP_STATUS=$(echo "$SERVICES" | grep "HTTP_STATUS:" | cut -d: -f2)
+          RESPONSE=$(echo "$SERVICES" | sed '$d')
+
+          echo "API Response: $RESPONSE"
+          echo "HTTP Status: $HTTP_STATUS"
+          echo ""
+
+          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.service.name=="network-security-audit-frontend") | .service.id' 2>/dev/null)
+          OWNER_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.service.name=="network-security-audit-frontend") | .service.ownerId' 2>/dev/null)
+
+          echo "Frontend ID: $FRONTEND_ID"
+          echo "Owner ID: $OWNER_ID"
+          echo ""
+
+          if [ ! -z "$FRONTEND_ID" ] && [ "$FRONTEND_ID" != "null" ]; then
+            echo "🗑️  Deleting broken frontend..."
+            DELETE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "https://api.render.com/v1/services/$FRONTEND_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY")
+
+            DELETE_HTTP=$(echo "$DELETE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            echo "Delete Response Status: $DELETE_HTTP"
+            echo "✅ Deleted"
+            sleep 15
+          else
+            echo "⚠️  No existing frontend service found, using extracted owner ID"
+          fi
+
+          echo ""
+          echo "📦 Creating new Static Site frontend..."
+          CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "static_site",
+              "name": "network-security-audit-frontend",
+              "ownerId": "'"$OWNER_ID"'",
+              "repo": "'"$NEW_REPO"'",
+              "branch": "main",
+              "rootDir": "network-security-audit/frontend",
+              "buildCommand": "npm install && npm run build",
+              "publishPath": "build",
+              "plan": "free",
+              "region": "oregon",
+              "envVars": [
+                {
+                  "key": "REACT_APP_API_URL",
+                  "value": "https://network-security-audit-backend.onrender.com"
+                }
+              ]
+            }')
+
+          CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+
+          echo "Create Response Status: $CREATE_HTTP"
+          echo "Create Response Body:"
+          echo "$CREATE_BODY" | jq '.' 2>/dev/null || echo "$CREATE_BODY"
+          echo ""
+
+          if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
+            echo "✅ Frontend service created"
+            SERVICE_ID=$(echo "$CREATE_BODY" | jq -r '.service.id' 2>/dev/null)
+            echo "Service ID: $SERVICE_ID"
+
+            # Update service with correct build settings
+            echo ""
+            echo "⚙️ Updating build settings..."
+            UPDATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PATCH "https://api.render.com/v1/services/$SERVICE_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "serviceDetails": {
+                  "buildCommand": "npm install && npm run build",
+                  "publishPath": "build"
+                }
+              }')
+
+            UPDATE_HTTP=$(echo "$UPDATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            echo "Update Response Status: $UPDATE_HTTP"
+
+            if [ "$UPDATE_HTTP" = "200" ]; then
+              echo "✅ Build settings updated"
+            else
+              echo "⚠️ Update status: $UPDATE_HTTP"
+            fi
+          else
+            echo "❌ Failed to create frontend service"
+            exit 1
+          fi
+
+          echo ""
+          echo "✨ Done! Render deploying (3-5 minutes)..."
