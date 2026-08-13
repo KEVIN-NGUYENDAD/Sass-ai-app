@@ -4,9 +4,27 @@ import { PortScanner, PasswordChecker, WiFiSecurityChecker, NetworkInfo, ScanHis
 import { useLanguage } from './i18n';
 
 function App() {
+  // HTTPS enforcement for production
+  useEffect(() => {
+    if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+      window.location.href = window.location.href.replace('http://', 'https://');
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [scanHistory, setScanHistory] = useState([]);
-  const [apiUrl] = useState(process.env.REACT_APP_API_URL || 'http://localhost:5000');
+  const [apiUrl] = useState(() => {
+    const configured = process.env.REACT_APP_API_URL;
+    if (configured) return configured;
+
+    if (window.location.hostname === 'localhost') {
+      return 'http://localhost:5000';
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'https:';
+    return `${protocol}//${window.location.host}/api`;
+  });
+  const [apiToken] = useState(process.env.REACT_APP_API_TOKEN || '');
   const [language, setLanguage] = useState(() => localStorage.getItem('language') || 'vi');
   const [apiConnected, setApiConnected] = useState(null);
 
@@ -142,11 +160,11 @@ function App() {
       </nav>
 
       <main className="main-content">
-        {activeTab === 'dashboard' && <Dashboard apiUrl={apiUrl} strings={strings} language={language} />}
-        {activeTab === 'port-scan' && <PortScanner apiUrl={apiUrl} onScan={addToHistory} strings={strings} />}
-        {activeTab === 'password' && <PasswordChecker apiUrl={apiUrl} onCheck={addToHistory} strings={strings} />}
-        {activeTab === 'wifi' && <WiFiSecurityChecker apiUrl={apiUrl} onCheck={addToHistory} strings={strings} />}
-        {activeTab === 'network-info' && <NetworkInfo apiUrl={apiUrl} strings={strings} />}
+        {activeTab === 'dashboard' && <Dashboard apiUrl={apiUrl} apiToken={apiToken} strings={strings} language={language} />}
+        {activeTab === 'port-scan' && <PortScanner apiUrl={apiUrl} apiToken={apiToken} onScan={addToHistory} strings={strings} />}
+        {activeTab === 'password' && <PasswordChecker apiUrl={apiUrl} apiToken={apiToken} onCheck={addToHistory} strings={strings} />}
+        {activeTab === 'wifi' && <WiFiSecurityChecker apiUrl={apiUrl} apiToken={apiToken} onCheck={addToHistory} strings={strings} />}
+        {activeTab === 'network-info' && <NetworkInfo apiUrl={apiUrl} apiToken={apiToken} strings={strings} />}
         {activeTab === 'history' && <ScanHistory history={scanHistory} strings={strings} />}
       </main>
 

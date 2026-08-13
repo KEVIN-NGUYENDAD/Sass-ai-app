@@ -1,16 +1,43 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 from security_scanner import NetworkSecurityScanner
 from datetime import datetime
 import json
+import secrets
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Security: API token for authentication
+API_TOKEN = os.getenv('API_TOKEN', secrets.token_urlsafe(32))
+if os.getenv('API_TOKEN') is None:
+    print(f"⚠️  WARNING: No API_TOKEN set. Using random token: {API_TOKEN}")
+    print("Set API_TOKEN environment variable for production.")
+
+def require_auth(f):
+    """Decorator to require API token authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('X-API-Token', '')
+        if not token or token != API_TOKEN:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized',
+                'message': 'Invalid or missing API token'
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def is_localhost(host):
+    """Check if target is localhost (CRITICAL security restriction)"""
+    localhost_variants = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']
+    return host.lower() in localhost_variants
 
 # Initialize scanner
 scanner = NetworkSecurityScanner()
@@ -27,12 +54,21 @@ def health_check():
     }), 200
 
 @app.route('/api/scan/ports', methods=['POST'])
+@require_auth
 def scan_ports():
-    """Quét cổng mở trên thiết bị"""
+    """Quét cổng mở trên thiết bị (CRITICAL: localhost only)"""
     try:
-        data = request.json
+        data = request.json or {}
         target_host = data.get('target', 'localhost')
         ports = data.get('ports', '1-1000')
+
+        # CRITICAL FIX: Only allow scanning localhost
+        if not is_localhost(target_host):
+            return jsonify({
+                'success': False,
+                'error': 'Security restriction',
+                'message': 'Port scanning is only allowed on localhost (127.0.0.1)'
+            }), 403
 
         print(f"[*] Scanning ports on {target_host}...")
 
@@ -60,10 +96,11 @@ def scan_ports():
         }), 400
 
 @app.route('/api/scan/password', methods=['POST'])
+@require_auth
 def check_password_strength():
     """Kiểm tra độ mạnh của mật khẩu"""
     try:
-        data = request.json
+        data = request.json or {}
         password = data.get('password', '')
 
         if not password:
@@ -94,14 +131,22 @@ def check_password_strength():
         }), 400
 
 @app.route('/api/scan/network-info', methods=['GET'])
+@require_auth
 def get_network_info():
-    """Lấy thông tin mạng hiện tại"""
+    """Lấy thông tin mạng hiện tại (HIGH: auth required, info disclosure)"""
     try:
         info = scanner.get_network_info()
 
+        # MEDIUM FIX: Limit sensitive information exposure
+        safe_info = {
+            'hostname': info.get('hostname'),
+            'os': info.get('os'),
+            'message': 'Network info limited to authorized users'
+        }
+
         return jsonify({
             'success': True,
-            'data': info,
+            'data': safe_info,
             'message': 'Network info retrieved'
         }), 200
 
@@ -112,10 +157,11 @@ def get_network_info():
         }), 400
 
 @app.route('/api/scan/wifi-security', methods=['POST'])
+@require_auth
 def check_wifi_security():
     """Kiểm tra an ninh WiFi"""
     try:
-        data = request.json
+        data = request.json or {}
         ssid = data.get('ssid', '')
         password = data.get('password', '')
 
@@ -142,6 +188,7 @@ def check_wifi_security():
         }), 400
 
 @app.route('/api/scan/history', methods=['GET'])
+@require_auth
 def get_scan_history():
     """Lấy lịch sử các lần quét"""
     try:
@@ -159,6 +206,7 @@ def get_scan_history():
         }), 400
 
 @app.route('/api/scan/clear-history', methods=['POST'])
+@require_auth
 def clear_history():
     """Xóa lịch sử quét"""
     global scan_history
@@ -170,11 +218,20 @@ def clear_history():
     }), 200
 
 @app.route('/api/scan/quick-audit', methods=['POST'])
+@require_auth
 def quick_audit():
-    """Audit nhanh toàn bộ an ninh"""
+    """Audit nhanh toàn bộ an ninh (CRITICAL: localhost only)"""
     try:
-        data = request.json
+        data = request.json or {}
         target_host = data.get('target', 'localhost')
+
+        # CRITICAL FIX: Only allow auditing localhost
+        if not is_localhost(target_host):
+            return jsonify({
+                'success': False,
+                'error': 'Security restriction',
+                'message': 'Audit is only allowed on localhost (127.0.0.1)'
+            }), 403
 
         audit_result = {
             'timestamp': datetime.now().isoformat(),
@@ -183,7 +240,11 @@ def quick_audit():
         }
 
         # Check network info
-        audit_result['checks']['network_info'] = scanner.get_network_info()
+        info = scanner.get_network_info()
+        audit_result['checks']['network_info'] = {
+            'hostname': info.get('hostname'),
+            'os': info.get('os')
+        }
 
         # Check common ports
         audit_result['checks']['port_scan'] = scanner.scan_ports(target_host, '21,22,23,80,443,445,3306,5432,5900')
@@ -243,6 +304,24 @@ def get_security_recommendations():
         'success': True,
         'data': recommendations
     }), 200
+
+@app.before_request
+def security_before_request():
+    """HIGH: Enforce HTTPS in production"""
+    if os.getenv('FLASK_ENV') == 'production' and not request.is_secure:
+        url = request.url.replace('http://', 'https://', 1)
+        return redirect(url, code=301)
+
+@app.after_request
+def security_headers(response):
+    """HIGH: Add security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    return response
 
 @app.errorhandler(404)
 def not_found(error):

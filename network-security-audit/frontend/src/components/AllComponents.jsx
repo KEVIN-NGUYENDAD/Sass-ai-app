@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 // Port Scanner Component
-export function PortScanner({ apiUrl, onScan, strings }) {
+export function PortScanner({ apiUrl, apiToken, onScan, strings }) {
   const [target, setTarget] = useState('localhost');
   const [ports, setPorts] = useState('1-1000');
   const [loading, setLoading] = useState(false);
@@ -29,9 +29,12 @@ export function PortScanner({ apiUrl, onScan, strings }) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiToken) headers['X-API-Token'] = apiToken;
+
       const response = await fetch(`${apiUrl}/api/scan/ports`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ target, ports }),
         signal: controller.signal
       });
@@ -155,7 +158,7 @@ export function PortScanner({ apiUrl, onScan, strings }) {
 }
 
 // Password Checker Component
-export function PasswordChecker({ apiUrl, onCheck, strings }) {
+export function PasswordChecker({ apiUrl, apiToken, onCheck, strings }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [result, setResult] = useState(null);
@@ -181,9 +184,12 @@ export function PasswordChecker({ apiUrl, onCheck, strings }) {
     setError(null);
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiToken) headers['X-API-Token'] = apiToken;
+
       const response = await fetch(`${apiUrl}/api/scan/password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ password })
       });
 
@@ -306,7 +312,7 @@ export function PasswordChecker({ apiUrl, onCheck, strings }) {
 }
 
 // WiFi Security Checker Component
-export function WiFiSecurityChecker({ apiUrl, onCheck, strings }) {
+export function WiFiSecurityChecker({ apiUrl, apiToken, onCheck, strings }) {
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -331,9 +337,12 @@ export function WiFiSecurityChecker({ apiUrl, onCheck, strings }) {
     setError(null);
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiToken) headers['X-API-Token'] = apiToken;
+
       const response = await fetch(`${apiUrl}/api/scan/wifi-security`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ ssid, password })
       });
 
@@ -464,7 +473,7 @@ export function WiFiSecurityChecker({ apiUrl, onCheck, strings }) {
 }
 
 // Network Info Component
-export function NetworkInfo({ apiUrl, strings }) {
+export function NetworkInfo({ apiUrl, apiToken, strings }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -477,7 +486,10 @@ export function NetworkInfo({ apiUrl, strings }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${apiUrl}/api/scan/network-info`);
+      const headers = {};
+      if (apiToken) headers['X-API-Token'] = apiToken;
+
+      const response = await fetch(`${apiUrl}/api/scan/network-info`, { headers });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
 
@@ -609,7 +621,7 @@ export function ScanHistory({ history, strings }) {
 }
 
 // Dashboard Component
-export function Dashboard({ apiUrl, strings }) {
+export function Dashboard({ apiUrl, apiToken, strings }) {
   const [recommendations, setRecommendations] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -619,7 +631,10 @@ export function Dashboard({ apiUrl, strings }) {
 
   const fetchRecommendations = async () => {
     try {
-      const response = await fetch(`${apiUrl}/api/recommendations`);
+      const headers = {};
+      if (apiToken) headers['X-API-Token'] = apiToken;
+
+      const response = await fetch(`${apiUrl}/api/recommendations`, { headers });
       const data = await response.json();
       if (data.success) {
         setRecommendations(data.data);
