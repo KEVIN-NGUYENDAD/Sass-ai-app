@@ -43,23 +43,23 @@ jobs:
               --arg buildCommand "pip install -r requirements.txt" \
               --arg startCommand "gunicorn app:app" \
               '{
-                type: $type,
-                name: $name,
-                ownerId: $ownerId,
-                repo: $repo,
-                branch: $branch,
-                rootDir: $rootDir,
-                runtime: $runtime,
-                plan: $plan,
-                region: $region,
-                serviceDetails: {
-                  buildCommand: $buildCommand,
-                  startCommand: $startCommand
+                "type": $type,
+                "name": $name,
+                "ownerId": $ownerId,
+                "repo": $repo,
+                "branch": $branch,
+                "rootDir": $rootDir,
+                "runtime": $runtime,
+                "plan": $plan,
+                "region": $region,
+                "serviceDetails": {
+                  "buildCommand": $buildCommand,
+                  "startCommand": $startCommand
                 },
-                envVars: [
-                  {key: "FLASK_ENV", value: "production"},
-                  {key: "DEBUG", value: "False"},
-                  {key: "CORS_ORIGINS", value: "https://network-security-audit-frontend.onrender.com"}
+                "envVars": [
+                  {"key": "FLASK_ENV", "value": "production"},
+                  {"key": "DEBUG", "value": "False"},
+                  {"key": "CORS_ORIGINS", "value": "https://network-security-audit-frontend.onrender.com"}
                 ]
               }')
 
