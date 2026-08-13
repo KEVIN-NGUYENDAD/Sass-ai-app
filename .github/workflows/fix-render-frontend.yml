@@ -19,24 +19,37 @@ jobs:
           NEW_REPO="https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
 
           echo "🔍 Fetching services..."
-          SERVICES=$(curl -s -X GET "https://api.render.com/v1/services" \
+          SERVICES=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X GET "https://api.render.com/v1/services" \
             -H "Authorization: Bearer $RENDER_API_KEY")
 
-          FRONTEND_ID=$(echo "$SERVICES" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .id' 2>/dev/null)
+          HTTP_STATUS=$(echo "$SERVICES" | grep "HTTP_STATUS:" | cut -d: -f2)
+          RESPONSE=$(echo "$SERVICES" | sed '$d')
+
+          echo "API Response: $RESPONSE"
+          echo "HTTP Status: $HTTP_STATUS"
+          echo ""
+
+          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .id' 2>/dev/null)
 
           echo "Frontend ID: $FRONTEND_ID"
           echo ""
 
           if [ ! -z "$FRONTEND_ID" ] && [ "$FRONTEND_ID" != "null" ]; then
             echo "🗑️  Deleting broken frontend..."
-            curl -s -X DELETE "https://api.render.com/v1/services/$FRONTEND_ID" \
-              -H "Authorization: Bearer $RENDER_API_KEY" > /dev/null
+            DELETE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "https://api.render.com/v1/services/$FRONTEND_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY")
+
+            DELETE_HTTP=$(echo "$DELETE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            echo "Delete Response Status: $DELETE_HTTP"
             echo "✅ Deleted"
             sleep 15
+          else
+            echo "⚠️  No existing frontend service found, skipping deletion"
           fi
 
+          echo ""
           echo "📦 Creating new Static Site frontend..."
-          curl -s -X POST "https://api.render.com/v1/services" \
+          CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{
@@ -48,11 +61,30 @@ jobs:
               "publishPath": "network-security-audit/frontend/build",
               "plan": "free",
               "region": "oregon",
-              "envVars": {
-                "REACT_APP_API_URL": "https://network-security-audit-backend.onrender.com"
-              }
-            }' > /dev/null
+              "envVars": [
+                {
+                  "key": "REACT_APP_API_URL",
+                  "value": "https://network-security-audit-backend.onrender.com"
+                }
+              ]
+            }')
 
-          echo "✅ Frontend created"
+          CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+
+          echo "Create Response Status: $CREATE_HTTP"
+          echo "Create Response Body:"
+          echo "$CREATE_BODY" | jq '.' 2>/dev/null || echo "$CREATE_BODY"
+          echo ""
+
+          if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
+            echo "✅ Frontend service created successfully"
+            SERVICE_ID=$(echo "$CREATE_BODY" | jq -r '.id' 2>/dev/null)
+            echo "Service ID: $SERVICE_ID"
+          else
+            echo "❌ Failed to create frontend service"
+            exit 1
+          fi
+
           echo ""
           echo "✨ Done! Render deploying (2-3 minutes)..."
