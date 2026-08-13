@@ -1,11 +1,14 @@
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 import os
 from security_scanner import NetworkSecurityScanner
 from datetime import datetime
 import json
 import secrets
+import re
 from functools import wraps
 
 # Load environment variables
@@ -13,6 +16,13 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Security: Rate limiting to prevent DoS attacks
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["100 per hour", "10 per minute"]
+)
 
 # Security: API token for authentication
 API_TOKEN = os.getenv('API_TOKEN', secrets.token_urlsafe(32))
@@ -39,6 +49,46 @@ def is_localhost(host):
     localhost_variants = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']
     return host.lower() in localhost_variants
 
+def validate_port_range(ports_str):
+    """Validate port range input to prevent injection attacks"""
+    if not ports_str or not isinstance(ports_str, str):
+        return False
+    ports_str = ports_str.strip()
+    if len(ports_str) > 100:  # Limit length
+        return False
+    # Allow: 80, 80,443,8080, 1-1000, 1-65535
+    if re.match(r'^[\d,\-\s]+$', ports_str):
+        return True
+    return False
+
+def validate_hostname(hostname):
+    """Validate hostname/IP input"""
+    if not hostname or not isinstance(hostname, str):
+        return False
+    hostname = hostname.strip()
+    if len(hostname) > 255:
+        return False
+    # Allow hostnames, IPs, localhost
+    if re.match(r'^[a-zA-Z0-9\.\:\-_]+$', hostname):
+        return True
+    return False
+
+def validate_password(password):
+    """Validate password input"""
+    if not password or not isinstance(password, str):
+        return False
+    if len(password) < 1 or len(password) > 128:
+        return False
+    return True
+
+def validate_ssid(ssid):
+    """Validate WiFi SSID input"""
+    if not isinstance(ssid, str):
+        return False
+    if len(ssid) > 32:  # WiFi SSID max 32 chars
+        return False
+    return True
+
 # Initialize scanner
 scanner = NetworkSecurityScanner()
 
@@ -46,8 +96,9 @@ scanner = NetworkSecurityScanner()
 scan_history = []
 
 @app.route('/api/health', methods=['GET'])
+@limiter.limit("60 per minute")
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint (rate limited)"""
     return jsonify({
         'status': 'ok',
         'timestamp': datetime.now().isoformat()
@@ -55,12 +106,28 @@ def health_check():
 
 @app.route('/api/scan/ports', methods=['POST'])
 @require_auth
+@limiter.limit("5 per minute")
 def scan_ports():
-    """Quét cổng mở trên thiết bị (CRITICAL: localhost only)"""
+    """Quét cổng mở trên thiết bị (CRITICAL: localhost only, rate limited)"""
     try:
         data = request.json or {}
-        target_host = data.get('target', 'localhost')
-        ports = data.get('ports', '1-1000')
+        target_host = data.get('target', 'localhost').strip()
+        ports = data.get('ports', '1-1000').strip()
+
+        # INPUT VALIDATION: Validate inputs
+        if not validate_hostname(target_host):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Invalid hostname format'
+            }), 400
+
+        if not validate_port_range(ports):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Invalid port range format (use: 80 or 80,443 or 1-1000)'
+            }), 400
 
         # CRITICAL FIX: Only allow scanning localhost
         if not is_localhost(target_host):
@@ -97,8 +164,9 @@ def scan_ports():
 
 @app.route('/api/scan/password', methods=['POST'])
 @require_auth
+@limiter.limit("10 per minute")
 def check_password_strength():
-    """Kiểm tra độ mạnh của mật khẩu"""
+    """Kiểm tra độ mạnh của mật khẩu (rate limited, validated input)"""
     try:
         data = request.json or {}
         password = data.get('password', '')
@@ -107,6 +175,14 @@ def check_password_strength():
             return jsonify({
                 'success': False,
                 'error': 'Password is required'
+            }), 400
+
+        # INPUT VALIDATION: Validate password
+        if not validate_password(password):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Password must be 1-128 characters'
             }), 400
 
         result = scanner.check_password_strength(password)
@@ -132,8 +208,9 @@ def check_password_strength():
 
 @app.route('/api/scan/network-info', methods=['GET'])
 @require_auth
+@limiter.limit("20 per minute")
 def get_network_info():
-    """Lấy thông tin mạng hiện tại (HIGH: auth required, info disclosure)"""
+    """Lấy thông tin mạng hiện tại (HIGH: auth required, info disclosure, rate limited)"""
     try:
         info = scanner.get_network_info()
 
@@ -158,12 +235,28 @@ def get_network_info():
 
 @app.route('/api/scan/wifi-security', methods=['POST'])
 @require_auth
+@limiter.limit("8 per minute")
 def check_wifi_security():
-    """Kiểm tra an ninh WiFi"""
+    """Kiểm tra an ninh WiFi (rate limited, validated input)"""
     try:
         data = request.json or {}
-        ssid = data.get('ssid', '')
-        password = data.get('password', '')
+        ssid = data.get('ssid', '').strip()
+        password = data.get('password', '').strip()
+
+        # INPUT VALIDATION: Validate SSID and password
+        if not validate_ssid(ssid):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Invalid SSID (max 32 characters)'
+            }), 400
+
+        if not validate_password(password):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Password must be 1-128 characters'
+            }), 400
 
         result = scanner.check_wifi_security(ssid, password)
 
@@ -189,10 +282,14 @@ def check_wifi_security():
 
 @app.route('/api/scan/history', methods=['GET'])
 @require_auth
+@limiter.limit("30 per minute")
 def get_scan_history():
-    """Lấy lịch sử các lần quét"""
+    """Lấy lịch sử các lần quét (rate limited)"""
     try:
         limit = request.args.get('limit', 50, type=int)
+        # Validate limit parameter
+        if limit < 1 or limit > 500:
+            limit = 50
         return jsonify({
             'success': True,
             'data': scan_history[-limit:],
@@ -207,8 +304,9 @@ def get_scan_history():
 
 @app.route('/api/scan/clear-history', methods=['POST'])
 @require_auth
+@limiter.limit("5 per minute")
 def clear_history():
-    """Xóa lịch sử quét"""
+    """Xóa lịch sử quét (rate limited)"""
     global scan_history
     scan_history = []
 
@@ -219,11 +317,20 @@ def clear_history():
 
 @app.route('/api/scan/quick-audit', methods=['POST'])
 @require_auth
+@limiter.limit("3 per minute")
 def quick_audit():
-    """Audit nhanh toàn bộ an ninh (CRITICAL: localhost only)"""
+    """Audit nhanh toàn bộ an ninh (CRITICAL: localhost only, rate limited)"""
     try:
         data = request.json or {}
-        target_host = data.get('target', 'localhost')
+        target_host = data.get('target', 'localhost').strip()
+
+        # INPUT VALIDATION: Validate hostname
+        if not validate_hostname(target_host):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Invalid hostname format'
+            }), 400
 
         # CRITICAL FIX: Only allow auditing localhost
         if not is_localhost(target_host):
@@ -268,8 +375,9 @@ def quick_audit():
         }), 400
 
 @app.route('/api/recommendations', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_security_recommendations():
-    """Đề xuất cải thiện an ninh"""
+    """Đề xuất cải thiện an ninh (rate limited)"""
     recommendations = {
         'network': [
             'Đặt mật khẩu WiFi mạnh (ít nhất 12 ký tự)',
