@@ -24,8 +24,8 @@ jobs:
           echo "HTTP Status: $HTTP_STATUS"
           echo ""
 
-          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .service.id' 2>/dev/null)
-          OWNER_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .service.ownerId' 2>/dev/null)
+          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.service.name=="network-security-audit-frontend") | .service.id' 2>/dev/null)
+          OWNER_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.service.name=="network-security-audit-frontend") | .service.ownerId' 2>/dev/null)
 
           echo "Frontend ID: $FRONTEND_ID"
           echo "Owner ID: $OWNER_ID"
