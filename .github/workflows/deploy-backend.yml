@@ -27,62 +27,75 @@ jobs:
           echo "Owner ID: $OWNER_ID"
           echo ""
           
-          if [ -z "$BACKEND_ID" ] || [ "$BACKEND_ID" = "null" ]; then
-            echo "📦 Creating new backend service..."
+          if [ ! -z "$BACKEND_ID" ] && [ "$BACKEND_ID" != "null" ]; then
+            echo "🗑️  Deleting existing backend service (ID: $BACKEND_ID)..."
+            DELETE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "https://api.render.com/v1/services/$BACKEND_ID" \
+              -H "Authorization: Bearer $RENDER_API_KEY")
 
-            PAYLOAD=$(jq -n \
-              --arg type "web_service" \
-              --arg name "network-security-audit-backend" \
-              --arg ownerId "$OWNER_ID" \
-              --arg repo "$NEW_REPO" \
-              --arg branch "main" \
-              --arg rootDir "network-security-audit/backend" \
-              --arg runtime "python" \
-              --arg plan "free" \
-              --arg region "oregon" \
-              --arg buildCommand "pip install -r requirements.txt" \
-              --arg startCommand "gunicorn app:app --bind 0.0.0.0:\$PORT" \
-              '{
-                "type": $type,
-                "name": $name,
-                "ownerId": $ownerId,
-                "repo": $repo,
-                "branch": $branch,
-                "rootDir": $rootDir,
-                "runtime": $runtime,
-                "plan": $plan,
-                "region": $region,
-                "serviceDetails": {
-                  "buildCommand": $buildCommand,
-                  "startCommand": $startCommand
-                },
-                "envVars": [
-                  {"key": "FLASK_ENV", "value": "production"},
-                  {"key": "DEBUG", "value": "False"},
-                  {"key": "CORS_ORIGINS", "value": "https://network-security-audit-frontend.onrender.com"}
-                ]
-              }')
+            DELETE_HTTP=$(echo "$DELETE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            echo "Delete Response Status: $DELETE_HTTP"
 
-            CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "$PAYLOAD")
-            
-            CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-            CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
-            
-            echo "Create Response Status: $CREATE_HTTP"
-            echo "Create Response Body:"
-            echo "$CREATE_BODY" | jq '.' 2>/dev/null || echo "$CREATE_BODY"
-            
-            if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
-              echo "✅ Backend service created successfully"
+            if [ "$DELETE_HTTP" = "204" ] || [ "$DELETE_HTTP" = "200" ]; then
+              echo "✅ Backend service deleted successfully"
+              echo "⏳ Waiting for deletion to complete..."
+              sleep 3
             else
-              echo "❌ Failed to create backend service"
-              exit 1
+              echo "⚠️  Warning: Failed to delete backend service, attempting to proceed anyway"
             fi
+          fi
+
+          echo "📦 Creating new backend service..."
+
+          PAYLOAD=$(jq -n \
+            --arg type "web_service" \
+            --arg name "network-security-audit-backend" \
+            --arg ownerId "$OWNER_ID" \
+            --arg repo "$NEW_REPO" \
+            --arg branch "main" \
+            --arg rootDir "network-security-audit/backend" \
+            --arg runtime "python" \
+            --arg plan "free" \
+            --arg region "oregon" \
+            --arg buildCommand "pip install -r requirements.txt" \
+            --arg startCommand "gunicorn app:app --bind 0.0.0.0:\$PORT" \
+            '{
+              "type": $type,
+              "name": $name,
+              "ownerId": $ownerId,
+              "repo": $repo,
+              "branch": $branch,
+              "rootDir": $rootDir,
+              "runtime": $runtime,
+              "plan": $plan,
+              "region": $region,
+              "serviceDetails": {
+                "buildCommand": $buildCommand,
+                "startCommand": $startCommand
+              },
+              "envVars": [
+                {"key": "FLASK_ENV", "value": "production"},
+                {"key": "DEBUG", "value": "False"},
+                {"key": "CORS_ORIGINS", "value": "https://network-security-audit-frontend.onrender.com"}
+              ]
+            }')
+
+          CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+
+          echo "Create Response Status: $CREATE_HTTP"
+          echo "Create Response Body:"
+          echo "$CREATE_BODY" | jq '.' 2>/dev/null || echo "$CREATE_BODY"
+
+          if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
+            echo "✅ Backend service created successfully"
           else
-            echo "✅ Backend service already exists (ID: $BACKEND_ID)"
+            echo "❌ Failed to create backend service"
+            exit 1
           fi
           
           echo ""
