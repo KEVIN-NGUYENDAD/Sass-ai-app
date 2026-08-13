@@ -39,10 +39,12 @@ jobs:
                 "repo": "'"$NEW_REPO"'",
                 "branch": "main",
                 "rootDir": "network-security-audit/backend",
-                "buildCommand": "pip install -r requirements.txt",
-                "startCommand": "gunicorn app:app",
                 "plan": "free",
                 "region": "oregon",
+                "serviceDetails": {
+                  "buildCommand": "pip install -r requirements.txt",
+                  "startCommand": "gunicorn app:app"
+                },
                 "envVars": [
                   {
                     "key": "FLASK_ENV",
