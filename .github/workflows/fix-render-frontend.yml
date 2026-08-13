@@ -24,9 +24,11 @@ jobs:
           echo "HTTP Status: $HTTP_STATUS"
           echo ""
 
-          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .id' 2>/dev/null)
+          FRONTEND_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .service.id' 2>/dev/null)
+          OWNER_ID=$(echo "$RESPONSE" | jq -r '.[] | select(.name=="network-security-audit-frontend") | .service.ownerId' 2>/dev/null)
 
           echo "Frontend ID: $FRONTEND_ID"
+          echo "Owner ID: $OWNER_ID"
           echo ""
 
           if [ ! -z "$FRONTEND_ID" ] && [ "$FRONTEND_ID" != "null" ]; then
@@ -39,7 +41,7 @@ jobs:
             echo "✅ Deleted"
             sleep 15
           else
-            echo "⚠️  No existing frontend service found, skipping deletion"
+            echo "⚠️  No existing frontend service found, using extracted owner ID"
           fi
 
           echo ""
@@ -50,10 +52,12 @@ jobs:
             -d '{
               "type": "static_site",
               "name": "network-security-audit-frontend",
+              "ownerId": "'"$OWNER_ID"'",
               "repo": "'"$NEW_REPO"'",
               "branch": "main",
-              "buildCommand": "cd network-security-audit/frontend && npm install && npm run build",
-              "publishPath": "network-security-audit/frontend/build",
+              "rootDir": "network-security-audit/frontend",
+              "buildCommand": "npm install && npm run build",
+              "publishPath": "build",
               "plan": "free",
               "region": "oregon",
               "envVars": [
