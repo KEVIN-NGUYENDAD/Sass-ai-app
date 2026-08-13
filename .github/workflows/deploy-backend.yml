@@ -39,6 +39,7 @@ jobs:
                 "repo": "'"$NEW_REPO"'",
                 "branch": "main",
                 "rootDir": "network-security-audit/backend",
+                "runtime": "python",
                 "plan": "free",
                 "region": "oregon",
                 "serviceDetails": {
