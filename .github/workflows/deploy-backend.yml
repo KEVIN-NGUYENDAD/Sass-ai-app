@@ -13,68 +13,49 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Create/Deploy Backend Service on Render
+      - name: Deploy Backend Service on Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "🔍 Checking for existing backend service..."
-          SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/services)
-          BACKEND_ID=$(echo "$SERVICES" | jq -r '.[] | select(.service.name=="network-security-audit-backend") | .service.id' 2>/dev/null)
-          OWNER_ID=$(echo "$SERVICES" | jq -r '.[0].service.ownerId' 2>/dev/null)
+          echo "🚀 Deploying backend to Render..."
+          echo ""
+          echo "⚠️  Note: Backend service must be manually created on Render dashboard first"
+          echo "    at https://dashboard.render.com with these settings:"
+          echo "    - Name: network-security-audit-backend"
+          echo "    - Type: Web Service"
+          echo "    - GitHub Repo: https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend"
+          echo "    - Branch: main"
+          echo "    - Runtime: Python"
+          echo "    - Root Directory: network-security-audit/backend"
+          echo "    - Build Command: pip install -r requirements.txt"
+          echo "    - Start Command: gunicorn app:app --bind 0.0.0.0:\$PORT"
+          echo ""
 
-          echo "Backend ID: $BACKEND_ID"
-          echo "Owner ID: $OWNER_ID"
+          # Try to deploy existing service
+          DEPLOY_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST 'https://api.render.com/v1/services/network-security-audit-backend/deploys' \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "do_clear"}')
 
-          if [ -z "$BACKEND_ID" ] || [ "$BACKEND_ID" = "null" ]; then
+          DEPLOY_HTTP=$(echo "$DEPLOY_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          DEPLOY_BODY=$(echo "$DEPLOY_RESPONSE" | sed '$d')
+
+          echo "Deploy Response Status: $DEPLOY_HTTP"
+          echo "Deploy Response Body:"
+          echo "$DEPLOY_BODY" | jq . 2>/dev/null || echo "$DEPLOY_BODY"
+
+          if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
             echo ""
-            echo "📦 Creating new backend service..."
-
-            # Build compact JSON payload - Render API may have issues with formatted JSON
-            PAYLOAD="{\"type\":\"web_service\",\"name\":\"network-security-audit-backend\",\"ownerId\":\"$OWNER_ID\",\"repo\":\"https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend\",\"branch\":\"main\",\"rootDir\":\"network-security-audit/backend\",\"runtime\":\"python\",\"plan\":\"free\",\"region\":\"oregon\",\"serviceDetails\":{\"buildCommand\":\"pip install -r requirements.txt\",\"startCommand\":\"gunicorn app:app --bind 0.0.0.0:\$PORT\"},\"envVars\":[{\"key\":\"FLASK_ENV\",\"value\":\"production\"},{\"key\":\"DEBUG\",\"value\":\"False\"},{\"key\":\"CORS_ORIGINS\",\"value\":\"https://network-security-audit-frontend.onrender.com\"}]}"
-
-            echo "Payload:"
-            echo "$PAYLOAD" | jq . 2>/dev/null || echo "$PAYLOAD"
+            echo "✅ Backend deployment triggered!"
+          elif echo "$DEPLOY_HTTP" | grep -q "404"; then
             echo ""
-
-            CREATE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services" \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "$PAYLOAD")
-
-            CREATE_HTTP=$(echo "$CREATE_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-            CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
-
-            echo "Create Response Status: $CREATE_HTTP"
-            echo "Create Response Body:"
-            echo "$CREATE_BODY" | jq . 2>/dev/null || echo "$CREATE_BODY"
-
-            if [ "$CREATE_HTTP" = "201" ] || [ "$CREATE_HTTP" = "200" ]; then
-              echo "✅ Backend service created successfully"
-            else
-              echo "❌ Failed to create backend service (Status: $CREATE_HTTP)"
-              exit 1
-            fi
+            echo "❌ Backend service not found on Render"
+            echo "📋 Please create it manually at https://dashboard.render.com/new"
+            exit 1
           else
-            echo "✅ Backend service already exists (ID: $BACKEND_ID)"
             echo ""
-            echo "🚀 Triggering deployment on existing service..."
-
-            DEPLOY_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://api.render.com/v1/services/$BACKEND_ID/deploys" \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{"clearCache": "do_clear"}')
-
-            DEPLOY_HTTP=$(echo "$DEPLOY_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-            DEPLOY_BODY=$(echo "$DEPLOY_RESPONSE" | sed '$d')
-
-            echo "Deploy Response Status: $DEPLOY_HTTP"
-            if [ "$DEPLOY_HTTP" = "201" ] || [ "$DEPLOY_HTTP" = "200" ]; then
-              echo "✅ Backend deployment triggered successfully"
-            else
-              echo "$DEPLOY_BODY" | jq . 2>/dev/null || echo "$DEPLOY_BODY"
-            fi
+            echo "⚠️  Deployment request returned status $DEPLOY_HTTP"
           fi
 
           echo ""
-          echo "✨ Backend deployment process complete!"
           echo "Backend URL: https://network-security-audit-backend.onrender.com"
