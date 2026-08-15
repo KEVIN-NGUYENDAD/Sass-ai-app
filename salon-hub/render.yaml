@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: salon-hub-backend
+    env: python
+    plan: free
+    rootDir: salon-hub/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: API_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: OWNER_PHONE
+        scope: shared
+      - key: STAFF_PASSWORD
+        scope: shared
+      - key: STRIPE_SECRET_KEY
+        scope: shared
+      - key: TWILIO_ACCOUNT_SID
+        scope: shared
+      - key: TWILIO_AUTH_TOKEN
+        scope: shared
+      - key: TWILIO_FROM_NUMBER
+        scope: shared
+    autoDeploy: true
+
+  - type: static_site
+    name: salon-hub-frontend
+    env: react
+    plan: free
+    rootDir: salon-hub/frontend
+    buildCommand: npm install && npm run build
+    publishDirectory: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://salon-hub-backend.onrender.com
+      - key: REACT_APP_API_TOKEN
+        scope: shared
+    autoDeploy: true
