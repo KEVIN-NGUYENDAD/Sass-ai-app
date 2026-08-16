@@ -1,0 +1,17 @@
+name: Disable GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  disable-pages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - name: Disable GitHub Pages
+        run: |
+          echo "GitHub Pages should be disabled in repository settings."
+          echo "This is a Flask backend app, not a static site."
