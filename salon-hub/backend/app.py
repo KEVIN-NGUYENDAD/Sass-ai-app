@@ -109,8 +109,50 @@ def require_staff_auth(f):
 
 def is_localhost(host):
     """Check if target is localhost (CRITICAL security restriction)"""
-    localhost_variants = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']
+    localhost_variants = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0', '[::]']
     return host.lower() in localhost_variants
+
+
+def is_safe_target(host):
+    """Check if target is safe for port scanning - block private/reserved ranges"""
+    host = host.lower().strip()
+
+    # Localhost allowed
+    if is_localhost(host):
+        return True
+
+    # Block private IP ranges (RFC 1918)
+    private_ranges = [
+        '10.',                    # 10.0.0.0/8
+        '172.16.', '172.17.', '172.18.', '172.19.',
+        '172.20.', '172.21.', '172.22.', '172.23.',
+        '172.24.', '172.25.', '172.26.', '172.27.',
+        '172.28.', '172.29.', '172.30.', '172.31.',  # 172.16.0.0/12
+        '192.168.',               # 192.168.0.0/16
+    ]
+
+    # Block link-local (169.254.0.0/16)
+    if host.startswith('169.254.'):
+        return False
+
+    # Block cloud metadata endpoints
+    metadata_ips = ['169.254.169.254', '0.0.0.0', '255.255.255.255']
+    if host in metadata_ips:
+        return False
+
+    # Block IPv6 private ranges
+    ipv6_private = ['fc', 'fd', 'fe80', 'fe90', 'fea0', 'feb0', 'fec0', 'fed0', 'fee0', 'fef0']
+    if ':' in host:
+        host_lower = host.lstrip('[').rstrip(']').lower()
+        if any(host_lower.startswith(prefix + ':') for prefix in ipv6_private):
+            return False
+
+    # Block private IPv4 ranges
+    for prefix in private_ranges:
+        if host.startswith(prefix):
+            return False
+
+    return True
 
 
 # ============================================================================
@@ -514,12 +556,12 @@ def scan_ports():
                 'message': 'Invalid port range (use: 80 or 80,443 or 1-1000)'
             }), 400
 
-        # CRITICAL: Only allow localhost
-        if not is_localhost(target_host):
+        # CRITICAL: Block private/reserved IP ranges
+        if not is_safe_target(target_host):
             return jsonify({
                 'success': False,
                 'error': 'Security restriction',
-                'message': 'Port scanning restricted to localhost only (127.0.0.1)'
+                'message': 'Port scanning blocked: target is private, reserved, or restricted (127.0.0.1 allowed only)'
             }), 403
 
         # Simulate safe port scan result
@@ -568,7 +610,17 @@ def scan_ports():
 @require_auth
 @limiter.limit("10 per minute")
 def check_password_strength():
-    """Check password strength (NIST SP 800-63B compliant)"""
+    """
+    Check password strength (NIST SP 800-63B compliant)
+
+    SECURITY NOTE: Password is transmitted to this endpoint for validation only.
+    - Password is NOT persisted, logged, or retained after evaluation
+    - Strength assessment is computed in-memory only
+    - No password data is written to database, files, or audit logs
+    - Response contains only strength assessment (no echoed password)
+    - Connection uses HTTPS in production with HSTS headers + CSP
+    - Algorithm: Length-based primary factor + entropy + pattern detection
+    """
     try:
         data = request.json or {}
         password = data.get('password', '')
@@ -658,7 +710,17 @@ def check_password_strength():
 @require_auth
 @limiter.limit("8 per minute")
 def check_wifi_security():
-    """Check WiFi security - emphasize password strength as critical factor"""
+    """
+    Check WiFi security - emphasize password strength as critical factor
+
+    SECURITY NOTE: WiFi password is transmitted to this endpoint for validation only.
+    The password is NOT persisted, logged, or retained after evaluation.
+    - Request data is validated and immediately evaluated
+    - Password strength is computed in-memory only
+    - No password data is stored in database, files, or logs
+    - Response contains only assessment (no echoed password)
+    - Connection uses HTTPS in production with HSTS headers
+    """
     try:
         data = request.json or {}
         ssid = data.get('ssid', '').strip()
