@@ -17,11 +17,16 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request, session, redirect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes session timeout
 logger = logging.getLogger("nail_salon_checkin")
+
+limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 # Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
 
@@ -62,6 +67,47 @@ def salon_today():
 STATUSES = ("waiting_confirm", "confirmed", "in_service", "complete", "cancelled")
 
 _lock = threading.Lock()
+
+AUDIT_FILE = os.path.join(DATA_DIR, "audit_log.json")
+
+
+def _log_audit(action, result, ip_address, details=None):
+    """Log audit trail for security events and staff actions.
+
+    Args:
+        action: What happened (e.g., 'staff_login', 'checkin_update', 'status_change')
+        result: Outcome (e.g., 'success', 'failed', 'denied')
+        ip_address: Source IP of the request
+        details: Optional dict with additional context
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    audit_entry = {
+        "timestamp": salon_now().isoformat(),
+        "action": action,
+        "result": result,
+        "ip_address": ip_address,
+        "details": details or {},
+    }
+
+    try:
+        if os.path.exists(AUDIT_FILE):
+            with open(AUDIT_FILE, "r", encoding="utf-8") as f:
+                try:
+                    logs = json.load(f)
+                except json.JSONDecodeError:
+                    logs = []
+        else:
+            logs = []
+
+        logs.append(audit_entry)
+        # Keep last 1000 entries to prevent unbounded growth
+        if len(logs) > 1000:
+            logs = logs[-1000:]
+
+        with open(AUDIT_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to write audit log: {e}")
 
 
 # --- SMS -------------------------------------------------------------------
@@ -222,19 +268,38 @@ def staff_login_page():
 
 
 @app.route("/api/staff-login", methods=["POST"])
+@limiter.limit("5 per minute")
 def api_staff_login():
+    """Staff login with rate limiting (5 attempts per minute)."""
     data = request.get_json(silent=True) or {}
     password = data.get("password", "").strip()
+
     if check_password_hash(STAFF_PASSWORD_HASH, password):
+        session.permanent = True
         session["staff_authenticated"] = True
+        session["login_time"] = salon_now().isoformat()
+        _log_audit("staff_login", "success", request.remote_addr)
         return jsonify({"success": True}), 200
+
+    _log_audit("staff_login", "failed", request.remote_addr)
     return jsonify({"error": "Incorrect password"}), 401
+
+
+@app.route("/api/staff-logout", methods=["POST"])
+def api_staff_logout():
+    """Safe logout: clear session and log the action."""
+    if session.get("staff_authenticated"):
+        _log_audit("staff_logout", "success", request.remote_addr)
+        session.clear()
+    return jsonify({"success": True}), 200
 
 
 @app.route("/staff")
 def staff_page():
     if not session.get("staff_authenticated"):
         return redirect("/staff-login")
+    # Log page access
+    _log_audit("staff_access", "success", request.remote_addr)
     return render_template("staff.html")
 
 
@@ -365,6 +430,9 @@ def api_checkins():
 
 @app.route("/api/checkins/<checkin_id>/status", methods=["POST"])
 def api_update_status(checkin_id):
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     if new_status not in STATUSES:
@@ -375,9 +443,16 @@ def api_update_status(checkin_id):
         checkins = full_data.get("checkins", [])
         for c in checkins:
             if c["id"] == checkin_id:
+                old_status = c.get("status")
                 c["status"] = new_status
                 full_data["checkins"] = checkins
                 _save_data(full_data)
+                _log_audit(
+                    "status_change",
+                    "success",
+                    request.remote_addr,
+                    {"checkin_id": checkin_id, "from": old_status, "to": new_status},
+                )
                 return jsonify({"checkin": c})
 
     return jsonify({"error": "Check-in not found"}), 404
@@ -385,6 +460,9 @@ def api_update_status(checkin_id):
 
 @app.route("/api/checkins/<checkin_id>/confirm-duration", methods=["POST"])
 def api_confirm_duration(checkin_id):
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
     try:
         duration = int(data.get("duration_minutes"))
@@ -405,6 +483,13 @@ def api_confirm_duration(checkin_id):
         checkin["status"] = "confirmed"
         full_data["checkins"] = checkins
         _save_data(full_data)
+
+    _log_audit(
+        "confirm_duration",
+        "success",
+        request.remote_addr,
+        {"checkin_id": checkin_id, "duration": duration, "customer": checkin.get("name")},
+    )
 
     send_sms(
         checkin.get("phone"),
