@@ -331,7 +331,7 @@ def api_slots():
         # don't allow booking a slot that has already started, for today
         if date_str == today_str:
             slot_dt = datetime.strptime(f"{date_str} {t}", "%Y-%m-%d %H:%M")
-            slot_dt = slot_dt.replace(tzinfo=SALON_TIMEZONE)
+            slot_dt = slot_dt.replace(tzinfo=ZoneInfo(SALON_TIMEZONE))
             if slot_dt <= now:
                 continue
         booked = counts.get(t, 0)
