@@ -1,7 +1,7 @@
 services:
-  # 🛠️ Salon Hub Backend (Flask API)
+  # 🔒 Network Security Audit Backend (Flask API)
   - type: web
-    name: salon-hub-backend
+    name: network-security-audit-backend
     env: python
     plan: free
     rootDir: salon-hub/backend
@@ -13,13 +13,13 @@ services:
       - key: DEBUG
         value: "False"
 
-  # 💅 Salon Hub Frontend (React)
+  # 🎨 Network Security Audit Frontend (React)
   - type: static_site
-    name: salon-hub-frontend
+    name: network-security-audit-frontend
     plan: free
     rootDir: salon-hub/frontend
     buildCommand: npm install && npm run build
     publicPath: build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://salon-hub-backend.onrender.com
+        value: https://network-security-audit-backend.onrender.com
