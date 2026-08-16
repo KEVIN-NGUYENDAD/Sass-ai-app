@@ -25,3 +25,19 @@ logs/
 # 🧪 Test coverage
 .coverage
 htmlcov/
+
+# Build artifacts
+build/
+dist/
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Temp files
+.DS_Store
+*.log
