@@ -28,3 +28,4 @@ services:
     envVars:
       - key: REACT_APP_API_URL
         value: https://network-security-audit-backend.onrender.com
+# Force Render rebuild at Sun Aug 16 23:13:34 UTC 2026
