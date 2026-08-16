@@ -1,9 +1,9 @@
 services:
+  # Backend (Flask API)
   - type: web
     name: network-security-audit-backend
     runtime: python
-    rootDir: network-security-audit/backend
-    repo: https://github.com/KEVIN-NGUYENDAD/network-security-audit-frontend
+    rootDir: salon-hub/backend
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -14,4 +14,17 @@ services:
       - key: DEBUG
         value: "False"
       - key: CORS_ORIGINS
-        value: https://network-security-audit-frontend.onrender.com
+        value: https://network-security-audit.onrender.com
+
+  # Frontend (React)
+  - type: static_site
+    name: network-security-audit-frontend
+    runtime: static
+    rootDir: salon-hub/frontend
+    region: global
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://network-security-audit-backend.onrender.com
