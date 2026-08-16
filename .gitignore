@@ -32,3 +32,8 @@ node_modules/
 package-lock.json
 **/node_modules/
 **/package-lock.json
+
+# Frontend build output
+salon-hub/frontend/build/
+salon-hub/frontend/node_modules/
+salon-hub/frontend/.cache/
