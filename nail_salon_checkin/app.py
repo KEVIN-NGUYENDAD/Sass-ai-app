@@ -283,6 +283,13 @@ def api_slots():
 
 @app.route("/api/checkin", methods=["POST"])
 def api_checkin():
+    """Handle customer check-in with thread-safe concurrency control.
+
+    Double-booking prevention:
+    - All slot availability checks and record creation happen within a lock
+    - If slot is full when request is processed, return 409 Conflict
+    - Only one concurrent request can succeed for the last available chair
+    """
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()

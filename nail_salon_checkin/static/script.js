@@ -52,6 +52,7 @@
     }
 
     let slotsRequestToken = 0;
+    let currentLoadedDate = null;
 
     async function loadSlots(options) {
         options = options || {};
@@ -60,27 +61,36 @@
             selectedTimeInput.value = '';
             slotGrid.innerHTML = '<p class="muted">Loading available times&hellip;</p>';
         }
+        const requestedDate = dateInput.value;
         const requestToken = ++slotsRequestToken;
         try {
-            const res = await fetch(`/api/slots?date=${encodeURIComponent(dateInput.value)}`);
+            const res = await fetch(`/api/slots?date=${encodeURIComponent(requestedDate)}`);
             const data = await res.json();
             if (requestToken !== slotsRequestToken) return; // a newer request/date change won.
             if (!res.ok) {
                 slotGrid.innerHTML = `<p class="muted">${data.error || 'Unable to load times.'}</p>`;
+                currentLoadedDate = null;
                 return;
             }
-            renderSlots(data.slots, selectedTimeInput.value);
+            if (data.date !== requestedDate) {
+                console.warn('Stale response: requested', requestedDate, 'got', data.date);
+                return;
+            }
+            renderSlots(data.slots, selectedTimeInput.value, requestedDate);
             slotGrid.dataset.loaded = '1';
+            currentLoadedDate = requestedDate;
         } catch (e) {
             if (requestToken !== slotsRequestToken) return;
             if (isFirstLoad) slotGrid.innerHTML = '<p class="muted">Connection error. Please try again.</p>';
+            currentLoadedDate = null;
         }
     }
 
-    function renderSlots(slots, previouslySelected) {
+    function renderSlots(slots, previouslySelected, loadedForDate) {
         if (!slots.length) {
             slotGrid.innerHTML = '<p class="muted">No more slots available for this date.</p>';
             selectedTimeInput.value = '';
+            currentLoadedDate = loadedForDate;
             return;
         }
         slotGrid.innerHTML = '';
@@ -113,6 +123,7 @@
         if (previouslySelected && !stillAvailable) {
             selectedTimeInput.value = '';
         }
+        currentLoadedDate = loadedForDate;
     }
 
     function startSlotsAutoRefresh() {
@@ -138,6 +149,28 @@
         selectedTimeInput.value = btn.dataset.time;
     }
 
+    function updateChipsFromNote() {
+        const current = serviceNote.value.trim();
+        const parts = current ? current.split(',').map((s) => s.trim()).filter(Boolean) : [];
+        chips.forEach((chip) => {
+            const service = chip.dataset.service;
+            const isInNote = parts.some(p => p.toLowerCase() === service.toLowerCase());
+            if (isInNote) {
+                chip.classList.add('active');
+                chip.setAttribute('aria-pressed', 'true');
+            } else {
+                chip.classList.remove('active');
+                chip.setAttribute('aria-pressed', 'false');
+            }
+        });
+    }
+
+    function updateNoteFromChips() {
+        const activeChips = Array.from(chips).filter((c) => c.classList.contains('active'));
+        const services = activeChips.map((c) => c.dataset.service);
+        serviceNote.value = services.length > 0 ? services.join(', ') : '';
+    }
+
     chips.forEach((chip) => {
         chip.setAttribute('role', 'button');
         chip.setAttribute('aria-pressed', 'false');
@@ -146,19 +179,16 @@
             chip.classList.toggle('active');
             const isActive = chip.classList.contains('active');
             chip.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-            const current = serviceNote.value.trim();
-            const parts = current ? current.split(',').map((s) => s.trim()).filter(Boolean) : [];
-            const idx = parts.indexOf(service);
-            if (isActive) {
-                if (idx === -1) parts.push(service);
-            } else if (idx !== -1) {
-                parts.splice(idx, 1);
-            }
-            serviceNote.value = parts.join(', ');
+            updateNoteFromChips();
         });
     });
 
+    serviceNote.addEventListener('change', updateChipsFromNote);
+    serviceNote.addEventListener('blur', updateChipsFromNote);
+
     dateInput.addEventListener('change', () => {
+        selectedTimeInput.value = '';
+        slotGrid.innerHTML = '<p class="muted">Loading available times&hellip;</p>';
         delete slotGrid.dataset.loaded;
         loadSlots();
     });
@@ -188,10 +218,14 @@
         }
         if (!time) return showError('Please choose a time slot.');
         if (!note) return showError("Please add a note about the service you'd like.");
+        if (currentLoadedDate !== date) {
+            return showError('Please reload the page to refresh available times.');
+        }
 
         nameInput.removeAttribute('aria-invalid');
         phoneInput.removeAttribute('aria-invalid');
 
+        if (submitBtn.disabled) return; // Prevent double-submission
         submitBtn.disabled = true;
         submitBtn.textContent = 'Checking in…';
 
@@ -228,7 +262,11 @@
 
     newCheckinBtn.addEventListener('click', () => {
         form.reset();
-        chips.forEach((c) => c.classList.remove('active'));
+        chips.forEach((c) => {
+            c.classList.remove('active');
+            c.setAttribute('aria-pressed', 'false');
+        });
+        clearError();
         initDateInput();
         delete slotGrid.dataset.loaded;
         submitBtn.disabled = false;
