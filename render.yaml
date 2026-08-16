@@ -1,15 +1,25 @@
 services:
+  # 🛠️ Salon Hub Backend (Flask API)
   - type: web
-    name: huong-pharmacy-ai-copilot
+    name: salon-hub-backend
     env: python
     plan: free
+    rootDir: salon-hub/backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
 
-  - type: web
-    name: nail-salon-checkin
-    env: python
+  # 💅 Salon Hub Frontend (React)
+  - type: static_site
+    name: salon-hub-frontend
     plan: free
-    rootDir: nail_salon_checkin
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    rootDir: salon-hub/frontend
+    buildCommand: npm install && npm run build
+    publicPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://salon-hub-backend.onrender.com
