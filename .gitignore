@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 nail_salon_checkin/data/
+salon-hub/backend/data/
 
 # 🔒 Environment & Credentials
 .env.local
@@ -25,3 +26,9 @@ logs/
 # 🧪 Test coverage
 .coverage
 htmlcov/
+
+# 📦 Node.js dependencies
+node_modules/
+package-lock.json
+**/node_modules/
+**/package-lock.json
