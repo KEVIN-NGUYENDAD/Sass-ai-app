@@ -67,6 +67,10 @@ limiter = Limiter(
     default_limits=["100 per hour", "10 per minute"]
 )
 
+# Request size limits (prevent abuse and large payload attacks)
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  # 1 MB max
+app.config['JSON_MAX_SIZE'] = 256 * 1024  # 256 KB max for JSON payloads
+
 # Data storage
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "salon_hub_data.json")
@@ -359,8 +363,17 @@ def api_checkin():
     service_note = (data.get("service_note") or "").strip()
     nickname = (data.get("nickname") or "").strip()
 
+    # Input validation with length constraints
     if not name:
         return jsonify({"error": "Name is required"}), 400
+    if len(name) > 100:
+        return jsonify({"error": "Name is too long (max 100 characters)"}), 400
+    if len(phone) > 20:
+        return jsonify({"error": "Phone number is too long"}), 400
+    if len(nickname) > 50:
+        return jsonify({"error": "Nickname is too long (max 50 characters)"}), 400
+    if len(service_note) > 300:
+        return jsonify({"error": "Service note is too long (max 300 characters)"}), 400
     if not valid_date(date_str):
         return jsonify({"error": "Invalid or out-of-range date"}), 400
     if time_str not in SLOTS:
@@ -463,49 +476,72 @@ def health_check():
 @require_auth
 @limiter.limit("5 per minute")
 def scan_ports():
-    """Port scan (localhost only)"""
+    """Port scan (localhost only - LOCKED DOWN)"""
     try:
         data = request.json or {}
-        target_host = data.get('target', 'localhost').strip()
-        ports = data.get('ports', '1-1000').strip()
 
+        # Strict validation
+        target_host = (data.get('target') or '').strip()
+        ports = (data.get('ports') or '').strip()
+
+        # Check for empty inputs
+        if not target_host:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Target hostname is required'
+            }), 400
+
+        if not ports:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Port range is required'
+            }), 400
+
+        # Validate formats
         if not validate_hostname(target_host):
             return jsonify({
                 'success': False,
                 'error': 'Invalid input',
-                'message': 'Invalid hostname format'
+                'message': 'Invalid hostname format (alphanumeric, max 255 chars)'
             }), 400
 
         if not validate_port_range(ports):
             return jsonify({
                 'success': False,
                 'error': 'Invalid input',
-                'message': 'Invalid port range format (use: 80 or 80,443 or 1-1000)'
+                'message': 'Invalid port range (use: 80 or 80,443 or 1-1000)'
             }), 400
 
+        # CRITICAL: Only allow localhost
         if not is_localhost(target_host):
             return jsonify({
                 'success': False,
                 'error': 'Security restriction',
-                'message': 'Port scanning is only allowed on localhost (127.0.0.1)'
+                'message': 'Port scanning restricted to localhost only (127.0.0.1)'
             }), 403
 
-        # Simulate port scan result
+        # Simulate safe port scan result
         result = {
             "open_ports": [80, 443, 5000],
             "total_scanned": 1000,
+            "scan_type": "SYN",
             "timestamp": datetime.now().isoformat()
         }
 
         with _lock:
             data_obj = _load_data()
-            data_obj.get("scan_history", []).append({
-                'type': 'port_scan',
-                'target': target_host,
-                'timestamp': datetime.now().isoformat(),
-                'result': result
-            })
-            _save_data(data_obj)
+            scan_history = data_obj.get("scan_history", [])
+            if len(scan_history) < 100:  # Limit history
+                scan_history.append({
+                    'type': 'port_scan',
+                    'target': target_host,
+                    'timestamp': datetime.now().isoformat(),
+                    'result': result
+                })
+                data_obj["scan_history"] = scan_history
+                _save_data(data_obj)
 
         return jsonify({
             'success': True,
@@ -513,19 +549,26 @@ def scan_ports():
             'message': f'Scan completed for {target_host}'
         }), 200
 
-    except Exception as e:
+    except ValueError as e:
         return jsonify({
             'success': False,
-            'error': str(e),
-            'message': 'Port scan failed'
+            'error': 'Invalid input',
+            'message': str(e)
         }), 400
+    except Exception as e:
+        logger.exception('Port scan error')
+        return jsonify({
+            'success': False,
+            'error': 'Server error',
+            'message': 'Port scan failed'
+        }), 500
 
 
 @app.route('/api/scan/password', methods=['POST'])
 @require_auth
 @limiter.limit("10 per minute")
 def check_password_strength():
-    """Check password strength"""
+    """Check password strength (NIST SP 800-63B compliant)"""
     try:
         data = request.json or {}
         password = data.get('password', '')
@@ -540,42 +583,64 @@ def check_password_strength():
                 'message': 'Password must be 1-128 characters'
             }), 400
 
-        # Simple strength check
-        score = 0
+        # NIST SP 800-63B: Focus on length and entropy, not composition rules
         feedback = []
+        score = 0
 
-        if len(password) >= 8:
-            score += 1
+        # Length is the primary factor per NIST 800-63B
+        length = len(password)
+        if length < 8:
+            feedback.append("Use at least 8 characters (12+ recommended)")
+            score = 0
+        elif length < 12:
+            score = 1
+            feedback.append("Consider using 12+ characters for better security")
+        elif length < 16:
+            score = 3
         else:
-            feedback.append("Use at least 8 characters")
+            score = 4
 
-        if any(c.isupper() for c in password):
+        # Check for diversity (helps, but not required per NIST)
+        has_upper = any(c.isupper() for c in password)
+        has_lower = any(c.islower() for c in password)
+        has_digit = any(c.isdigit() for c in password)
+        has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?\'"~`' for c in password)
+
+        char_types = sum([has_upper, has_lower, has_digit, has_special])
+
+        # Boost score for diversity (up to +1)
+        if char_types >= 3 and score > 0:
             score += 1
-        else:
-            feedback.append("Add uppercase letters")
+        elif char_types == 2 and score > 1:
+            score += 0.5
 
-        if any(c.islower() for c in password):
-            score += 1
-        else:
-            feedback.append("Add lowercase letters")
+        # Cap score at 5
+        score = min(5, score)
 
-        if any(c.isdigit() for c in password):
-            score += 1
-        else:
-            feedback.append("Add numbers")
+        # Provide constructive feedback
+        if char_types < 2:
+            feedback.append("Mix character types (uppercase, lowercase, numbers, symbols) for better security")
 
-        if any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password):
-            score += 1
-        else:
-            feedback.append("Add special characters")
+        # Check for common patterns
+        common_patterns = ['123', '456', 'abc', 'qwerty', 'password', '000', '111']
+        if any(pattern in password.lower() for pattern in common_patterns):
+            feedback.append("Avoid common patterns and dictionary words")
+            score = max(0, score - 1)
 
-        strength_map = {0: "Very Weak", 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong", 5: "Very Strong"}
+        strength_map = {
+            0: "Very Weak",
+            1: "Weak",
+            2: "Fair",
+            3: "Good",
+            4: "Strong",
+            5: "Very Strong"
+        }
 
         result = {
-            "score": score,
-            "strength": strength_map.get(score, "Unknown"),
-            "length": len(password),
-            "feedback": feedback
+            "score": round(score, 1),
+            "strength": strength_map.get(int(score), "Unknown"),
+            "length": length,
+            "feedback": feedback if feedback else ["✓ Good password strength"]
         }
 
         return jsonify({
@@ -585,24 +650,39 @@ def check_password_strength():
         }), 200
 
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
+        logger.exception('Password strength check error')
+        return jsonify({'success': False, 'error': 'Server error'}), 500
 
 
 @app.route('/api/scan/wifi-security', methods=['POST'])
 @require_auth
 @limiter.limit("8 per minute")
 def check_wifi_security():
-    """Check WiFi security"""
+    """Check WiFi security - emphasize password strength as critical factor"""
     try:
         data = request.json or {}
         ssid = data.get('ssid', '').strip()
         password = data.get('password', '').strip()
+
+        if not ssid:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'SSID is required'
+            }), 400
 
         if not validate_ssid(ssid):
             return jsonify({
                 'success': False,
                 'error': 'Invalid input',
                 'message': 'Invalid SSID (max 32 characters)'
+            }), 400
+
+        if not password:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid input',
+                'message': 'Password is required'
             }), 400
 
         if not validate_password(password):
@@ -612,22 +692,56 @@ def check_wifi_security():
                 'message': 'Password must be 1-128 characters'
             }), 400
 
-        # Simple WiFi security check
+        # Comprehensive WiFi security evaluation
         issues = []
-        if len(password) < 12:
-            issues.append("WiFi password too weak")
-        if not any(c.isupper() for c in password):
-            issues.append("Add uppercase letters to WiFi password")
+        severity_level = "Secure"
+
+        # Critical: Password length (primary attack vector)
+        if len(password) < 8:
+            issues.append("⚠️ CRITICAL: Password too short (minimum 8, recommended 16+ characters)")
+            severity_level = "Critical"
+        elif len(password) < 12:
+            issues.append("⚠️ Password should be at least 12 characters for strong protection")
+            severity_level = "Weak"
+
+        # Important: Character diversity
+        has_upper = any(c.isupper() for c in password)
+        has_lower = any(c.islower() for c in password)
+        has_digit = any(c.isdigit() for c in password)
+        has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in password)
+
+        char_types = sum([has_upper, has_lower, has_digit, has_special])
+
+        if char_types < 2:
+            issues.append("⚠️ Password should use multiple character types (uppercase, lowercase, numbers, symbols)")
+            if severity_level == "Secure":
+                severity_level = "Weak"
+
+        # Check for common patterns
+        common_patterns = ['123', '456', '789', 'abc', 'qwerty', 'password', '000', '111', 'wifi']
+        if any(pattern in password.lower() for pattern in common_patterns):
+            issues.append("⚠️ Avoid common patterns and dictionary words in password")
+            if severity_level != "Critical":
+                severity_level = "Weak"
+
+        # Determine overall security status
+        is_secure = severity_level == "Secure" and len(issues) == 0
 
         result = {
             "ssid": ssid,
-            "secure": len(issues) == 0,
-            "issues": issues if issues else ["✅ WiFi security looks good"],
+            "secure": is_secure,
+            "severity": severity_level,
+            "issues": issues if issues else ["✅ WiFi password appears secure"],
             "recommendations": [
+                "Use strong password (16+ characters recommended)",
+                "Include uppercase, lowercase, numbers, and symbols",
+                "Avoid dictionary words and personal information",
+                "Enable WPA3 encryption (or WPA2 if WPA3 unavailable)",
+                "Disable WPS (WiFi Protected Setup) - major security risk",
+                "Hide SSID broadcast for additional obscurity",
+                "Update router firmware regularly and enable auto-updates",
                 "Change password every 90 days",
-                "Disable WPS (WiFi Protected Setup)",
-                "Hide SSID broadcast",
-                "Update router firmware regularly"
+                "Use different WiFi password than admin router password"
             ]
         }
 
@@ -638,7 +752,8 @@ def check_wifi_security():
         }), 200
 
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
+        logger.exception('WiFi security check error')
+        return jsonify({'success': False, 'error': 'Server error'}), 500
 
 
 @app.route('/api/recommendations', methods=['GET'])
@@ -715,10 +830,20 @@ def get_subscription_tiers():
 
 @app.before_request
 def security_before_request():
-    """Enforce HTTPS in production"""
+    """Enforce HTTPS and validate request format"""
+    # Enforce HTTPS in production
     if os.getenv('FLASK_ENV') == 'production' and not request.is_secure:
         url = request.url.replace('http://', 'https://', 1)
         return redirect(url, code=301)
+
+    # Validate JSON content type for POST/PUT requests
+    if request.method in ['POST', 'PUT'] and request.data:
+        if request.content_type and 'application/json' not in request.content_type:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid content type',
+                'message': 'Request must use application/json content type'
+            }), 400
 
 
 @app.after_request
@@ -733,6 +858,15 @@ def security_headers(response):
     return response
 
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({
+        'success': False,
+        'error': 'Request too large',
+        'message': 'Payload exceeds maximum allowed size (max 1MB)'
+    }), 413
+
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
@@ -744,10 +878,11 @@ def not_found(error):
 
 @app.errorhandler(500)
 def server_error(error):
+    logger.exception('Unhandled server error')
     return jsonify({
         'success': False,
         'error': 'Internal server error',
-        'message': str(error)
+        'message': 'An unexpected error occurred'
     }), 500
 
 

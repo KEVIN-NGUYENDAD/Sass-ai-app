@@ -45,13 +45,20 @@ function SecurityModule({ apiToken, apiUrl }) {
       });
 
       const data = await response.json();
-      if (response.ok) {
-        setResults({ ...data.data, type: 'wifi' });
+      if (response.ok && data.data) {
+        setResults({
+          ssid: data.data.ssid || '',
+          secure: typeof data.data.secure === 'boolean' ? data.data.secure : false,
+          issues: Array.isArray(data.data.issues) ? data.data.issues : [],
+          recommendations: Array.isArray(data.data.recommendations) ? data.data.recommendations : [],
+          type: 'wifi'
+        });
       } else {
         setError(data.message || 'WiFi check failed');
       }
     } catch (err) {
       setError('Connection error. Please try again.');
+      console.error('WiFi check error:', err);
     } finally {
       setLoading(false);
     }
@@ -79,13 +86,20 @@ function SecurityModule({ apiToken, apiUrl }) {
       });
 
       const data = await response.json();
-      if (response.ok) {
-        setResults({ ...data.data, type: 'password' });
+      if (response.ok && data.data) {
+        setResults({
+          score: typeof data.data.score === 'number' ? data.data.score : 0,
+          strength: data.data.strength || 'Unknown',
+          length: typeof data.data.length === 'number' ? data.data.length : 0,
+          feedback: Array.isArray(data.data.feedback) ? data.data.feedback : [],
+          type: 'password'
+        });
       } else {
         setError(data.message || 'Password check failed');
       }
     } catch (err) {
       setError('Connection error. Please try again.');
+      console.error('Password check error:', err);
     } finally {
       setLoading(false);
     }

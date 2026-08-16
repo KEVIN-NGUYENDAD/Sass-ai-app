@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import CheckInModule from './components/CheckInModule';
 import SecurityModule from './components/SecurityModule';
 import LoginPage from './components/LoginPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [apiToken, setApiToken] = useState(null);
@@ -56,72 +57,74 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="header-left">
-          <h1>💅 Salon Hub</h1>
-          <p>Check-in + Security Suite</p>
-        </div>
-        <div className="header-right">
-          <button onClick={handleLogout} className="logout-btn">Logout</button>
-        </div>
-      </header>
+    <ErrorBoundary>
+      <div className="app">
+        <header className="app-header">
+          <div className="header-left">
+            <h1>💅 Salon Hub</h1>
+            <p>Check-in + Security Suite</p>
+          </div>
+          <div className="header-right">
+            <button onClick={handleLogout} className="logout-btn">Logout</button>
+          </div>
+        </header>
 
-      <nav className="app-nav">
-        <button
-          className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          📊 Dashboard
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'checkin' ? 'active' : ''}`}
-          onClick={() => setActiveTab('checkin')}
-        >
-          ✂️ Check-In
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'security' ? 'active' : ''}`}
-          onClick={() => setActiveTab('security')}
-        >
-          🔒 Security Audit
-        </button>
-        {staffMode && (
+        <nav className="app-nav">
           <button
-            className={`nav-btn ${activeTab === 'staff' ? 'active' : ''}`}
-            onClick={() => setActiveTab('staff')}
+            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
           >
-            👥 Staff Panel
+            📊 Dashboard
           </button>
-        )}
-      </nav>
+          <button
+            className={`nav-btn ${activeTab === 'checkin' ? 'active' : ''}`}
+            onClick={() => setActiveTab('checkin')}
+          >
+            ✂️ Check-In
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'security' ? 'active' : ''}`}
+            onClick={() => setActiveTab('security')}
+          >
+            🔒 Security Audit
+          </button>
+          {staffMode && (
+            <button
+              className={`nav-btn ${activeTab === 'staff' ? 'active' : ''}`}
+              onClick={() => setActiveTab('staff')}
+            >
+              👥 Staff Panel
+            </button>
+          )}
+        </nav>
 
-      <main className="app-main">
-        {activeTab === 'dashboard' && (
-          <Dashboard
-            apiToken={apiToken}
-            staffMode={staffMode}
-            apiUrl={getApiUrl()}
-          />
-        )}
-        {activeTab === 'checkin' && (
-          <CheckInModule
-            apiToken={apiToken}
-            apiUrl={getApiUrl()}
-          />
-        )}
-        {activeTab === 'security' && (
-          <SecurityModule
-            apiToken={apiToken}
-            apiUrl={getApiUrl()}
-          />
-        )}
-      </main>
+        <main className="app-main">
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              apiToken={apiToken}
+              staffMode={staffMode}
+              apiUrl={getApiUrl()}
+            />
+          )}
+          {activeTab === 'checkin' && (
+            <CheckInModule
+              apiToken={apiToken}
+              apiUrl={getApiUrl()}
+            />
+          )}
+          {activeTab === 'security' && (
+            <SecurityModule
+              apiToken={apiToken}
+              apiUrl={getApiUrl()}
+            />
+          )}
+        </main>
 
-      <footer className="app-footer">
-        <p>© 2026 Salon Hub | Check-in + Network Security for Nail Salons</p>
-      </footer>
-    </div>
+        <footer className="app-footer">
+          <p>© 2026 Salon Hub | Check-in + Network Security for Nail Salons</p>
+        </footer>
+      </div>
+    </ErrorBoundary>
   );
 }
 
