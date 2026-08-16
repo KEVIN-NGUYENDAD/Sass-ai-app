@@ -131,27 +131,17 @@ def send_sms(to_number, body):
     This lets the check-in / confirm flow work end-to-end in development
     (and before the owner has set up a Twilio account) without crashing.
     """
-    print(f"DEBUG: send_sms called with to_number={to_number}")
     if not to_number:
-        print("DEBUG: to_number is empty, returning")
         return
-    configured = _twilio_credentials_configured()
-    print(f"DEBUG: credentials configured={configured}, ACCOUNT_SID={TWILIO_ACCOUNT_SID[:5] if TWILIO_ACCOUNT_SID else None}, FROM_NUMBER={TWILIO_FROM_NUMBER}")
-    if not configured:
+    if not _twilio_credentials_configured():
         logger.info("[SMS not sent - Twilio not configured] to=%s body=%s", to_number, body)
-        print("DEBUG: Twilio not configured")
         return
     try:
-        print(f"DEBUG: creating Twilio client")
         client = _twilio_client()
-        print(f"DEBUG: calling messages.create")
         client.messages.create(to=to_number, from_=TWILIO_FROM_NUMBER, body=body)
         logger.info("[SMS sent] to=%s", to_number)
-        print(f"DEBUG: SMS sent successfully")
     except Exception as e:
         logger.warning("[SMS failed - continuing anyway] to=%s error=%s", to_number, str(e))
-        print(f"DEBUG: SMS failed with error: {e}")
-        # Don't crash; just log and continue. This allows the app to work even if Twilio is misconfigured.
 
 
 def get_base_url():
