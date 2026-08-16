@@ -19,6 +19,15 @@
         return local.toISOString().slice(0, 10);
     }
 
+    function validatePhone(phone) {
+        if (!phone || phone.trim().length < 7) return false;
+        return /[\d\-\+\(\)\s]+/.test(phone);
+    }
+
+    function validateName(name) {
+        return name && name.trim().length >= 1 && name.trim().length <= 100;
+    }
+
     function initDateInput() {
         const today = todayStr();
         const max = new Date();
@@ -29,6 +38,7 @@
         dateInput.min = today;
         dateInput.max = maxLocal;
         dateInput.value = today;
+        dateInput.setAttribute('aria-label', 'Select date for appointment');
     }
 
     function showError(message) {
@@ -81,6 +91,8 @@
             btn.className = 'slot-btn' + (slot.available <= 0 ? ' full' : '');
             btn.disabled = slot.available <= 0;
             btn.dataset.time = slot.time;
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('aria-label', `${formatTime(slot.time)} slot${slot.available <= 0 ? ' (full)' : ''}`);
             btn.innerHTML = `${formatTime(slot.time)}<span class="avail">${
                 slot.available <= 0 ? 'Full' : slot.available + ' open'
             }</span>`;
@@ -88,8 +100,13 @@
             if (previouslySelected && slot.time === previouslySelected) {
                 if (slot.available > 0) {
                     btn.classList.add('selected');
+                    btn.setAttribute('aria-pressed', 'true');
                     stillAvailable = true;
+                } else {
+                    btn.setAttribute('aria-pressed', 'false');
                 }
+            } else {
+                btn.setAttribute('aria-pressed', 'false');
             }
             slotGrid.appendChild(btn);
         });
@@ -112,19 +129,27 @@
     }
 
     function selectSlot(btn) {
-        slotGrid.querySelectorAll('.slot-btn').forEach((b) => b.classList.remove('selected'));
+        slotGrid.querySelectorAll('.slot-btn').forEach((b) => {
+            b.classList.remove('selected');
+            b.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('selected');
+        btn.setAttribute('aria-pressed', 'true');
         selectedTimeInput.value = btn.dataset.time;
     }
 
     chips.forEach((chip) => {
+        chip.setAttribute('role', 'button');
+        chip.setAttribute('aria-pressed', 'false');
         chip.addEventListener('click', () => {
             const service = chip.dataset.service;
             chip.classList.toggle('active');
+            const isActive = chip.classList.contains('active');
+            chip.setAttribute('aria-pressed', isActive ? 'true' : 'false');
             const current = serviceNote.value.trim();
             const parts = current ? current.split(',').map((s) => s.trim()).filter(Boolean) : [];
             const idx = parts.indexOf(service);
-            if (chip.classList.contains('active')) {
+            if (isActive) {
                 if (idx === -1) parts.push(service);
             } else if (idx !== -1) {
                 parts.splice(idx, 1);
@@ -142,16 +167,30 @@
         e.preventDefault();
         clearError();
 
-        const name = document.getElementById('name').value.trim();
-        const phone = document.getElementById('phone').value.trim();
-        const nickname = document.getElementById('nickname').value.trim();
+        const nameInput = document.getElementById('name');
+        const phoneInput = document.getElementById('phone');
+        const nicknameInput = document.getElementById('nickname');
+
+        const name = nameInput.value.trim();
+        const phone = phoneInput.value.trim();
+        const nickname = nicknameInput.value.trim();
         const date = dateInput.value;
         const time = selectedTimeInput.value;
         const note = serviceNote.value.trim();
 
-        if (!name) return showError('Please enter your name.');
+        if (!validateName(name)) {
+            nameInput.setAttribute('aria-invalid', 'true');
+            return showError('Please enter a valid name (1-100 characters).');
+        }
+        if (!validatePhone(phone)) {
+            phoneInput.setAttribute('aria-invalid', 'true');
+            return showError('Please enter a valid phone number (at least 7 digits).');
+        }
         if (!time) return showError('Please choose a time slot.');
         if (!note) return showError("Please add a note about the service you'd like.");
+
+        nameInput.removeAttribute('aria-invalid');
+        phoneInput.removeAttribute('aria-invalid');
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Checking in…';

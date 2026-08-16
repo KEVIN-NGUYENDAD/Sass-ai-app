@@ -19,17 +19,17 @@
                     <div class="field-row">
                         <div class="field">
                             <label for="name">Your name *</label>
-                            <input type="text" id="name" name="name" placeholder="e.g. Jane Smith" required>
+                            <input type="text" id="name" name="name" placeholder="e.g. Jane Smith" required maxlength="100" autocomplete="name">
                         </div>
                         <div class="field">
                             <label for="phone">Phone number *</label>
-                            <input type="tel" id="phone" name="phone" placeholder="e.g. (555) 123-4567" required>
+                            <input type="tel" id="phone" name="phone" placeholder="e.g. (555) 123-4567" required autocomplete="tel" pattern="[\d\-\+\(\)\s]{7,}" title="Phone number must be at least 7 digits">
                         </div>
                     </div>
 
                     <div class="field">
                         <label for="nickname">Nickname (tên gọi)</label>
-                        <input type="text" id="nickname" name="nickname" placeholder="e.g. Jane, JSmith, etc.">
+                        <input type="text" id="nickname" name="nickname" placeholder="e.g. Jane, JSmith, etc." maxlength="50" autocomplete="off">
                     </div>
 
                     <div class="field">
@@ -63,7 +63,7 @@
 
                     <div class="field">
                         <label for="serviceNote">Note: what service would you like? *</label>
-                        <textarea id="serviceNote" name="service_note" rows="3"
+                        <textarea id="serviceNote" name="service_note" rows="3" maxlength="500"
                             placeholder="e.g. Gel manicure with a French tip, and a classic pedicure. Nails are short."
                             required></textarea>
                     </div>
@@ -89,7 +89,8 @@
         </main>
 
         <footer class="footer">
-            <!-- Customer page - no staff links visible -->
+            <p class="footer-notice">Your name and phone number are used only for appointment confirmation and will not be shared with third parties. Data is retained for 30 days.</p>
+            <a href="/staff" class="footer-link">👥 Staff Dashboard</a>
         </footer>
     </div>
 

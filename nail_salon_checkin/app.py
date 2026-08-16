@@ -10,11 +10,14 @@ confirms, the customer gets a text confirming their appointment.
 import json
 import logging
 import os
+import re
 import threading
 import uuid
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request, session, redirect
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -23,6 +26,7 @@ logger = logging.getLogger("nail_salon_checkin")
 # Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
 
 # --- Configuration -----------------------------------------------------
+SALON_TIMEZONE = os.environ.get("SALON_TIMEZONE", "America/Los_Angeles")
 OPEN_HOUR = 9          # salon opens at 9:30 AM
 OPEN_MINUTE = 30
 CLOSE_HOUR = 19        # salon closes at 7:00 PM (last slot starts 6:30 PM)
@@ -34,7 +38,8 @@ DURATION_OPTIONS = (30, 45, 60)  # minutes the owner can confirm a service will 
 
 OWNER_PHONE = os.environ.get("OWNER_PHONE", "+16237604999")
 BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checkin.onrender.com
-STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD", "250618")
+_default_password = os.environ.get("STAFF_PASSWORD", "250618")
+STAFF_PASSWORD_HASH = generate_password_hash(_default_password)
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -47,6 +52,12 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "checkins.json")
+
+def salon_now():
+    return datetime.now(ZoneInfo(SALON_TIMEZONE))
+
+def salon_today():
+    return salon_now().date()
 
 STATUSES = ("waiting_confirm", "confirmed", "in_service", "complete", "cancelled")
 
@@ -167,7 +178,7 @@ def valid_date(date_str):
         d = datetime.strptime(date_str, "%Y-%m-%d").date()
     except (TypeError, ValueError):
         return False
-    today = datetime.now().date()
+    today = salon_today()
     return today <= d <= today + timedelta(days=MAX_DAYS_AHEAD - 1)
 
 
@@ -214,7 +225,7 @@ def staff_login_page():
 def api_staff_login():
     data = request.get_json(silent=True) or {}
     password = data.get("password", "").strip()
-    if password == STAFF_PASSWORD:
+    if check_password_hash(STAFF_PASSWORD_HASH, password):
         session["staff_authenticated"] = True
         return jsonify({"success": True}), 200
     return jsonify({"error": "Incorrect password"}), 401
@@ -245,7 +256,7 @@ def api_slots():
         full_data = _load_data()
         checkins = full_data.get("checkins", [])
 
-    now = datetime.now()
+    now = salon_now()
     today_str = now.strftime("%Y-%m-%d")
 
     counts = slot_occupancy(checkins, date_str)
@@ -280,14 +291,18 @@ def api_checkin():
     service_note = (data.get("service_note") or "").strip()
     nickname = (data.get("nickname") or "").strip()
 
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
+    if not name or len(name) > 100:
+        return jsonify({"error": "Name is required and must be under 100 characters"}), 400
+    if not phone or len(phone) < 7 or not re.search(r'[\d\-\+\(\)\s]{7,}', phone):
+        return jsonify({"error": "Please provide a valid phone number"}), 400
+    if len(nickname) > 50:
+        return jsonify({"error": "Nickname must be under 50 characters"}), 400
     if not valid_date(date_str):
         return jsonify({"error": "Invalid or out-of-range date"}), 400
     if time_str not in SLOTS:
         return jsonify({"error": "Invalid time slot"}), 400
-    if not service_note:
-        return jsonify({"error": "Please add a note about the service you'd like"}), 400
+    if not service_note or len(service_note) > 500:
+        return jsonify({"error": "Please add a note about the service you'd like (max 500 characters)"}), 400
 
     with _lock:
         full_data = _load_data()
@@ -310,7 +325,7 @@ def api_checkin():
             "duration_minutes": None,
             "confirmed": False,
             "confirm_token": uuid.uuid4().hex,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_at": salon_now().isoformat(timespec="seconds"),
             "note": "",
         }
         checkins.append(record)
@@ -332,7 +347,7 @@ def api_checkin():
 
 @app.route("/api/checkins")
 def api_checkins():
-    date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    date_str = request.args.get("date") or salon_now().strftime("%Y-%m-%d")
     with _lock:
         data = _load_data()
         checkins = data.get("checkins", [])
@@ -488,7 +503,7 @@ def api_checkin_by_staff():
             "duration_minutes": duration_minutes,
             "confirmed": True,
             "confirm_token": uuid.uuid4().hex,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_at": salon_now().isoformat(timespec="seconds"),
         }
         checkins.append(record)
         full_data["checkins"] = checkins
@@ -554,7 +569,7 @@ def save_daily_report():
             data["reports"][date] = {
                 "money_received": money,
                 "tips": tips,
-                "updated_at": datetime.now().isoformat()
+                "updated_at": salon_now().isoformat()
             }
             _save_data(data)
     except Exception as e:
@@ -665,7 +680,7 @@ def send_bulk_sms():
                     data["sms_log"] = []
                 data["sms_log"].append({
                     "count": sent_count,
-                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "timestamp": salon_now().isoformat(timespec="seconds"),
                     "reason": "Auto-send to 2+ week customers"
                 })
                 _save_data(data)
@@ -689,7 +704,7 @@ def get_weekly_report():
     except Exception:
         return jsonify({"days": []})
 
-    now = datetime.now()
+    now = salon_now()
     today = now.date()
     days_data = []
 
@@ -728,7 +743,7 @@ def get_monthly_report():
     except Exception:
         return jsonify({"weeks": []})
 
-    now = datetime.now()
+    now = salon_now()
     today = now.date()
     year = today.year
     month = today.month
@@ -870,7 +885,7 @@ def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
         lines.append(f"Total,{money + tips}")
 
     elif date_type == "week":
-        now = datetime.now()
+        now = salon_now()
         today = now.date()
         lines.append("BÁO CÁO TUẦN - Weekly Report")
         lines.append(f"Week Ending,{today.strftime('%Y-%m-%d')}")
@@ -892,7 +907,7 @@ def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
         lines.append(f"Weekly Total,{week_total_money + week_total_tips}")
 
     elif date_type == "month":
-        now = datetime.now()
+        now = salon_now()
         lines.append("BÁO CÁO THÁNG - Monthly Report")
         lines.append(f"Month,{now.strftime('%B %Y')}")
         lines.append("")
@@ -928,7 +943,7 @@ def export_daily_summary():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
 
-    date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    date_str = request.args.get("date") or salon_now().strftime("%Y-%m-%d")
 
     with _lock:
         data = _load_data()
@@ -955,7 +970,7 @@ def export_weekly_summary():
 
     csv_content = _generate_csv_report(checkins, reports, "week")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = salon_now().strftime("%Y-%m-%d")
     return csv_content, 200, {
         "Content-Type": "text/csv",
         "Content-Disposition": f'attachment; filename="weekly-report-{today}.csv"'
@@ -974,7 +989,7 @@ def export_monthly_summary():
 
     csv_content = _generate_csv_report(checkins, reports, "month")
 
-    today = datetime.now().strftime("%Y-%m")
+    today = salon_now().strftime("%Y-%m")
     return csv_content, 200, {
         "Content-Type": "text/csv",
         "Content-Disposition": f'attachment; filename="monthly-report-{today}.csv"'
@@ -989,7 +1004,7 @@ def send_summary_sms():
     data = request.get_json(silent=True) or {}
     report_type = data.get("type", "day")  # day, week, month
 
-    date_str = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+    date_str = data.get("date", salon_now().strftime("%Y-%m-%d"))
 
     base_url = get_base_url()
     if report_type == "day":
