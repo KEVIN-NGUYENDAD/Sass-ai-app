@@ -198,10 +198,6 @@ function SecurityModule({ apiToken, apiUrl }) {
     return '#10b981';
   };
 
-  const getSecurityStatus = (secure) => {
-    return secure ? '✅ Secure' : '⚠️ Needs Improvement';
-  };
-
   return (
     <div className="security-module">
       <div className="card">
