@@ -638,19 +638,21 @@ def check_password_strength():
         # NIST SP 800-63B: Focus on length and entropy, not composition rules
         feedback = []
         score = 0
+        length = len(password)
 
         # Length is the primary factor per NIST 800-63B
-        length = len(password)
         if length < 8:
-            feedback.append("Use at least 8 characters (12+ recommended)")
+            feedback.append("❌ CRITICAL: Use at least 8 characters (12+ recommended)")
             score = 0
         elif length < 12:
+            feedback.append("⚠️ Password is weak. Use 12+ characters for better protection")
             score = 1
-            feedback.append("Consider using 12+ characters for better security")
         elif length < 16:
             score = 3
+            feedback.append("✓ Length is good. Consider 16+ characters for extra security")
         else:
             score = 4
+            feedback.append("✓ Excellent password length")
 
         # Check for diversity (helps, but not required per NIST)
         has_upper = any(c.isupper() for c in password)
@@ -660,24 +662,25 @@ def check_password_strength():
 
         char_types = sum([has_upper, has_lower, has_digit, has_special])
 
-        # Boost score for diversity (up to +1)
-        if char_types >= 3 and score > 0:
+        # Boost score for diversity (up to +1, but only if length is reasonable)
+        if length >= 12 and char_types >= 3 and score > 0:
             score += 1
-        elif char_types == 2 and score > 1:
-            score += 0.5
+            feedback.append("✓ Good character diversity")
+        elif char_types < 2 and length < 16:
+            feedback.append("⚠️ Add multiple character types (uppercase, lowercase, numbers, symbols)")
+
+        # Heavily penalize common patterns and sequences
+        common_patterns = ['123', '234', '345', '456', '567', '678', '789', '890',
+                          'abc', 'bcd', 'cde', 'def', 'qwerty', 'password', '000',
+                          '111', '222', '333', '444', '555', '666', '777', '888',
+                          '999', 'wifi', 'admin', 'letmein']
+        has_common = any(pattern in password.lower() for pattern in common_patterns)
+        if has_common:
+            feedback.append("❌ Contains common patterns or dictionary words - very weak")
+            score = max(0, score - 2)
 
         # Cap score at 5
-        score = min(5, score)
-
-        # Provide constructive feedback
-        if char_types < 2:
-            feedback.append("Mix character types (uppercase, lowercase, numbers, symbols) for better security")
-
-        # Check for common patterns
-        common_patterns = ['123', '456', 'abc', 'qwerty', 'password', '000', '111']
-        if any(pattern in password.lower() for pattern in common_patterns):
-            feedback.append("Avoid common patterns and dictionary words")
-            score = max(0, score - 1)
+        score = min(5, max(0, score))
 
         strength_map = {
             0: "Very Weak",
@@ -757,16 +760,27 @@ def check_wifi_security():
         # Comprehensive WiFi security evaluation
         issues = []
         severity_level = "Secure"
+        risk_score = 0  # 0-10 scale where 10 is most risky
 
-        # Critical: Password length (primary attack vector)
-        if len(password) < 8:
-            issues.append("⚠️ CRITICAL: Password too short (minimum 8, recommended 16+ characters)")
+        # CRITICAL: Password length (primary attack vector)
+        password_len = len(password)
+        if password_len < 8:
+            issues.append("❌ CRITICAL: Password too short (minimum 8, recommended 16+ characters)")
             severity_level = "Critical"
-        elif len(password) < 12:
-            issues.append("⚠️ Password should be at least 12 characters for strong protection")
+            risk_score += 8
+        elif password_len < 12:
+            issues.append("⚠️ WEAK: Password should be at least 12 characters for strong protection")
             severity_level = "Weak"
+            risk_score += 5
+        elif password_len < 16:
+            issues.append("ℹ️ Password length is acceptable but 16+ is recommended")
+            severity_level = "Fair"
+            risk_score += 2
+        else:
+            issues.append("✓ Password length is strong (16+ characters)")
+            risk_score += 0
 
-        # Important: Character diversity
+        # Character diversity analysis
         has_upper = any(c.isupper() for c in password)
         has_lower = any(c.islower() for c in password)
         has_digit = any(c.isdigit() for c in password)
@@ -775,35 +789,54 @@ def check_wifi_security():
         char_types = sum([has_upper, has_lower, has_digit, has_special])
 
         if char_types < 2:
-            issues.append("⚠️ Password should use multiple character types (uppercase, lowercase, numbers, symbols)")
+            issues.append("⚠️ Low diversity: Use multiple character types (uppercase, lowercase, numbers, symbols)")
+            risk_score += 3
             if severity_level == "Secure":
                 severity_level = "Weak"
+        elif char_types == 2:
+            issues.append("ℹ️ Diversity could be improved - add more character types")
+            risk_score += 1
+            if severity_level == "Secure":
+                severity_level = "Fair"
+        else:
+            issues.append("✓ Good character diversity")
+            risk_score += 0
 
-        # Check for common patterns
-        common_patterns = ['123', '456', '789', 'abc', 'qwerty', 'password', '000', '111', 'wifi']
-        if any(pattern in password.lower() for pattern in common_patterns):
-            issues.append("⚠️ Avoid common patterns and dictionary words in password")
+        # Check for common patterns and weak sequences
+        common_patterns = ['123', '234', '345', '456', '567', '678', '789', '890',
+                          'abc', 'bcd', 'cde', 'def', 'qwerty', 'password', '000',
+                          '111', '222', '333', '444', '555', '666', '777', '888',
+                          '999', 'wifi', 'admin', 'letmein', '1234', '12345']
+        has_common = any(pattern in password.lower() for pattern in common_patterns)
+        if has_common:
+            issues.append("❌ WEAK: Password contains common patterns or dictionary words")
+            risk_score += 6
             if severity_level != "Critical":
-                severity_level = "Weak"
+                severity_level = "Critical"
+        else:
+            issues.append("✓ No obvious patterns or dictionary words detected")
 
-        # Determine overall security status
-        is_secure = severity_level == "Secure" and len(issues) == 0
+        # Determine overall security status based on comprehensive assessment
+        is_secure = severity_level == "Secure" or severity_level == "Fair"
+        if severity_level == "Critical":
+            is_secure = False
 
         result = {
             "ssid": ssid,
             "secure": is_secure,
             "severity": severity_level,
-            "issues": issues if issues else ["✅ WiFi password appears secure"],
+            "risk_score": min(10, risk_score),  # 0-10 scale for clarity
+            "issues": issues if issues else ["✓ WiFi password appears secure"],
             "recommendations": [
-                "Use strong password (16+ characters recommended)",
-                "Include uppercase, lowercase, numbers, and symbols",
-                "Avoid dictionary words and personal information",
-                "Enable WPA3 encryption (or WPA2 if WPA3 unavailable)",
-                "Disable WPS (WiFi Protected Setup) - major security risk",
-                "Hide SSID broadcast for additional obscurity",
-                "Update router firmware regularly and enable auto-updates",
-                "Change password every 90 days",
-                "Use different WiFi password than admin router password"
+                "🔑 Use strong password (16+ characters minimum)",
+                "🔤 Include uppercase, lowercase, numbers, and symbols",
+                "🚫 Avoid dictionary words and personal information",
+                "🔐 Enable WPA3 encryption (or WPA2 if WPA3 unavailable)",
+                "⚠️ Disable WPS (WiFi Protected Setup) - major security risk",
+                "👻 Hide SSID broadcast for additional obscurity (optional)",
+                "🔄 Update router firmware regularly and enable auto-updates",
+                "⏱️ Change password every 90 days",
+                "🔑 Use DIFFERENT WiFi password than admin router password"
             ]
         }
 
