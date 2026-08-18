@@ -6,7 +6,7 @@ services:
     rootDir: salon-hub/backend
     region: oregon
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: rm -rf __pycache__ *.pyc && pip cache purge && pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: FLASK_ENV
@@ -28,5 +28,5 @@ services:
     envVars:
       - key: REACT_APP_API_URL
         value: https://network-security-audit-backend.onrender.com
-# Force Render rebuild at Sun Aug 16 23:13:34 UTC 2026
-# Trigger full rebuild without cache
+# CRITICAL REBUILD: Force clean build without Python cache at 2026-08-18 (fix password scoring 0-5 scale)
+# Clear __pycache__, .pyc, and pip cache to ensure new NIST algorithm loads correctly
