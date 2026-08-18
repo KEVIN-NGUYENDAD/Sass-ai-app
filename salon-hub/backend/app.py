@@ -640,55 +640,39 @@ def check_password_strength():
         score = 0
         length = len(password)
 
-        # Length is the primary factor per NIST 800-63B
+        # NIST SP 800-63B: Length is the ONLY primary factor
+        # Passwords < 8 chars = 0 (Very Weak)
+        # Passwords 8-12 chars = 1 (Weak)
+        # Passwords 12-16 chars = 3 (Good)
+        # Passwords 16+ chars = 5 (Very Strong)
+
         if length < 8:
-            feedback.append("❌ CRITICAL: Use at least 8 characters (12+ recommended)")
             score = 0
+            feedback.append("❌ CRITICAL: Minimum 8 characters required")
         elif length < 12:
-            feedback.append("⚠️ Password is weak. Use 12+ characters for better protection")
             score = 1
+            feedback.append("⚠️ Weak: Add at least 12 characters")
         elif length < 16:
             score = 3
-            feedback.append("✓ Length is good. Consider 16+ characters for extra security")
+            feedback.append("✓ Good: 12-15 characters")
         else:
-            score = 4
-            feedback.append("✓ Excellent password length")
+            score = 5
+            feedback.append("✓ Very Strong: 16+ characters")
 
-        # Check for diversity (helps, but not required per NIST)
-        has_upper = any(c.isupper() for c in password)
-        has_lower = any(c.islower() for c in password)
-        has_digit = any(c.isdigit() for c in password)
-        has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?\'"~`' for c in password)
+        # Check for common weak patterns ONLY (not required, just indicators)
+        common_patterns = ['12345', '123456', '1234567', '12345678', '123456789',
+                          'password', 'qwerty', 'abc', 'admin', 'letmein',
+                          'dragon', 'master', 'monkey', 'shadow']
 
-        char_types = sum([has_upper, has_lower, has_digit, has_special])
-
-        # Boost score for diversity (up to +1, but only if length is reasonable)
-        if length >= 12 and char_types >= 3 and score > 0:
-            score += 1
-            feedback.append("✓ Good character diversity")
-        elif char_types < 2 and length < 16:
-            feedback.append("⚠️ Add multiple character types (uppercase, lowercase, numbers, symbols)")
-
-        # Heavily penalize common patterns and sequences
-        common_patterns = ['123', '234', '345', '456', '567', '678', '789', '890',
-                          'abc', 'bcd', 'cde', 'def', 'qwerty', 'password', '000',
-                          '111', '222', '333', '444', '555', '666', '777', '888',
-                          '999', 'wifi', 'admin', 'letmein']
-        has_common = any(pattern in password.lower() for pattern in common_patterns)
-        if has_common:
-            feedback.append("❌ Contains common patterns or dictionary words - very weak")
-            score = max(0, score - 2)
-
-        # Cap score at 5
-        score = min(5, max(0, score))
+        if any(p in password.lower() for p in common_patterns):
+            score = max(0, score - 1)
+            feedback.append("❌ Contains common weak pattern")
 
         strength_map = {
-            0: "Very Weak",
-            1: "Weak",
-            2: "Fair",
-            3: "Good",
-            4: "Strong",
-            5: "Very Strong"
+            0: "Very Weak",     # < 8 chars
+            1: "Weak",          # 8-11 chars
+            3: "Good",          # 12-15 chars
+            5: "Very Strong"    # 16+ chars
         }
 
         result = {
