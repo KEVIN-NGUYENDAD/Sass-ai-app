@@ -10,30 +10,44 @@ confirms, the customer gets a text confirming their appointment.
 import json
 import logging
 import os
+import re
 import threading
 import uuid
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request, session, redirect
-from werkzeug.security import check_password_hash, generate_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from bleach import clean
+from flask_wtf.csrf import CSRFProtect
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes session timeout
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 logger = logging.getLogger("nail_salon_checkin")
 
-# Security: Rate limiting
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+csrf = CSRFProtect(app)
+limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 # Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
 
+# --- Security Headers -------------------------------------------------------
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 # --- Configuration -----------------------------------------------------
+SALON_TIMEZONE = os.environ.get("SALON_TIMEZONE", "America/Los_Angeles")
 OPEN_HOUR = 9          # salon opens at 9:30 AM
 OPEN_MINUTE = 30
 CLOSE_HOUR = 19        # salon closes at 7:00 PM (last slot starts 6:30 PM)
@@ -45,9 +59,7 @@ DURATION_OPTIONS = (30, 45, 60)  # minutes the owner can confirm a service will 
 
 OWNER_PHONE = os.environ.get("OWNER_PHONE", "+16237604999")
 BASE_URL_OVERRIDE = os.environ.get("BASE_URL")  # e.g. https://nail-salon-checkin.onrender.com
-
-# Security: Hash staff password (generate hash from env or default)
-_default_password = os.environ.get("STAFF_PASSWORD", "ChangeMe123!")
+_default_password = os.environ.get("STAFF_PASSWORD", "250618")
 STAFF_PASSWORD_HASH = generate_password_hash(_default_password)
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -62,9 +74,56 @@ TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DATA_FILE = os.path.join(DATA_DIR, "checkins.json")
 
+def salon_now():
+    return datetime.now(ZoneInfo(SALON_TIMEZONE))
+
+def salon_today():
+    return salon_now().date()
+
 STATUSES = ("waiting_confirm", "confirmed", "in_service", "complete", "cancelled")
 
 _lock = threading.Lock()
+
+AUDIT_FILE = os.path.join(DATA_DIR, "audit_log.json")
+
+
+def _log_audit(action, result, ip_address, details=None):
+    """Log audit trail for security events and staff actions.
+
+    Args:
+        action: What happened (e.g., 'staff_login', 'checkin_update', 'status_change')
+        result: Outcome (e.g., 'success', 'failed', 'denied')
+        ip_address: Source IP of the request
+        details: Optional dict with additional context
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    audit_entry = {
+        "timestamp": salon_now().isoformat(),
+        "action": action,
+        "result": result,
+        "ip_address": ip_address,
+        "details": details or {},
+    }
+
+    try:
+        if os.path.exists(AUDIT_FILE):
+            with open(AUDIT_FILE, "r", encoding="utf-8") as f:
+                try:
+                    logs = json.load(f)
+                except json.JSONDecodeError:
+                    logs = []
+        else:
+            logs = []
+
+        logs.append(audit_entry)
+        # Keep last 1000 entries to prevent unbounded growth
+        if len(logs) > 1000:
+            logs = logs[-1000:]
+
+        with open(AUDIT_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to write audit log: {e}")
 
 
 # --- SMS -------------------------------------------------------------------
@@ -99,7 +158,6 @@ def send_sms(to_number, body):
         logger.info("[SMS sent] to=%s", to_number)
     except Exception as e:
         logger.warning("[SMS failed - continuing anyway] to=%s error=%s", to_number, str(e))
-        # Don't crash; just log and continue. This allows the app to work even if Twilio is misconfigured.
 
 
 def get_base_url():
@@ -109,14 +167,6 @@ def get_base_url():
     if root.startswith("http://") and "localhost" not in root and "127.0.0.1" not in root:
         root = "https://" + root[len("http://"):]
     return root
-
-
-def sanitize_input(text):
-    """Sanitize user input to prevent XSS attacks."""
-    if not text:
-        return ""
-    # Remove HTML tags and entities
-    return clean(str(text), tags=[], strip=True)
 
 
 def format_time_12h(t):
@@ -189,7 +239,7 @@ def valid_date(date_str):
         d = datetime.strptime(date_str, "%Y-%m-%d").date()
     except (TypeError, ValueError):
         return False
-    today = datetime.now().date()
+    today = salon_today()
     return today <= d <= today + timedelta(days=MAX_DAYS_AHEAD - 1)
 
 
@@ -215,29 +265,6 @@ def slot_occupancy(checkins, date_str):
     return occupancy
 
 
-# --- Security Middleware ---------------------------------------------------
-@app.before_request
-def security_before_request():
-    """Enforce HTTPS in production and log requests."""
-    if os.environ.get("FLASK_ENV") == "production" and not request.is_secure:
-        # Redirect to HTTPS
-        url = request.url.replace("http://", "https://", 1)
-        return redirect(url, code=301)
-    logger.info(f"{request.method} {request.path} from {request.remote_addr}")
-
-
-@app.after_request
-def security_headers(response):
-    """Add security headers to all responses."""
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
-    return response
-
-
 # --- Routes: pages --------------------------------------------------------
 @app.route("/")
 def checkin_page():
@@ -256,25 +283,40 @@ def staff_login_page():
 
 
 @app.route("/api/staff-login", methods=["POST"])
-@limiter.limit("5 per minute")  # Prevent brute force
+@limiter.limit("5 per minute")
+@csrf.exempt
 def api_staff_login():
+    """Staff login with rate limiting (5 attempts per minute)."""
     data = request.get_json(silent=True) or {}
     password = data.get("password", "").strip()
 
-    # Security: Use secure hash comparison
     if check_password_hash(STAFF_PASSWORD_HASH, password):
+        session.permanent = True
         session["staff_authenticated"] = True
-        logger.info(f"Staff login successful from {request.remote_addr}")
+        session["login_time"] = salon_now().isoformat()
+        _log_audit("staff_login", "success", request.remote_addr)
         return jsonify({"success": True}), 200
 
-    logger.warning(f"Failed staff login attempt from {request.remote_addr}")
+    _log_audit("staff_login", "failed", request.remote_addr)
     return jsonify({"error": "Incorrect password"}), 401
+
+
+@app.route("/api/staff-logout", methods=["POST"])
+@csrf.exempt
+def api_staff_logout():
+    """Safe logout: clear session and log the action."""
+    if session.get("staff_authenticated"):
+        _log_audit("staff_logout", "success", request.remote_addr)
+        session.clear()
+    return jsonify({"success": True}), 200
 
 
 @app.route("/staff")
 def staff_page():
     if not session.get("staff_authenticated"):
         return redirect("/staff-login")
+    # Log page access
+    _log_audit("staff_access", "success", request.remote_addr)
     return render_template("staff.html")
 
 
@@ -296,7 +338,7 @@ def api_slots():
         full_data = _load_data()
         checkins = full_data.get("checkins", [])
 
-    now = datetime.now()
+    now = salon_now()
     today_str = now.strftime("%Y-%m-%d")
 
     counts = slot_occupancy(checkins, date_str)
@@ -306,6 +348,7 @@ def api_slots():
         # don't allow booking a slot that has already started, for today
         if date_str == today_str:
             slot_dt = datetime.strptime(f"{date_str} {t}", "%Y-%m-%d %H:%M")
+            slot_dt = slot_dt.replace(tzinfo=ZoneInfo(SALON_TIMEZONE))
             if slot_dt <= now:
                 continue
         booked = counts.get(t, 0)
@@ -322,24 +365,35 @@ def api_slots():
 
 
 @app.route("/api/checkin", methods=["POST"])
-@limiter.limit("20 per hour")  # Public endpoint - rate limited
+@csrf.exempt
 def api_checkin():
+    """Handle customer check-in with thread-safe concurrency control.
+
+    Double-booking prevention:
+    - All slot availability checks and record creation happen within a lock
+    - If slot is full when request is processed, return 409 Conflict
+    - Only one concurrent request can succeed for the last available chair
+    """
     data = request.get_json(silent=True) or {}
-    name = sanitize_input((data.get("name") or "").strip())
+    name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()
     date_str = (data.get("date") or "").strip()
     time_str = (data.get("time") or "").strip()
-    service_note = sanitize_input((data.get("service_note") or "").strip())
-    nickname = sanitize_input((data.get("nickname") or "").strip())
+    service_note = (data.get("service_note") or "").strip()
+    nickname = (data.get("nickname") or "").strip()
 
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
+    if not name or len(name) > 100:
+        return jsonify({"error": "Name is required and must be under 100 characters"}), 400
+    if not phone or len(phone) < 7 or not re.search(r'[\d\-\+\(\)\s]{7,}', phone):
+        return jsonify({"error": "Please provide a valid phone number"}), 400
+    if len(nickname) > 50:
+        return jsonify({"error": "Nickname must be under 50 characters"}), 400
     if not valid_date(date_str):
         return jsonify({"error": "Invalid or out-of-range date"}), 400
     if time_str not in SLOTS:
         return jsonify({"error": "Invalid time slot"}), 400
-    if not service_note:
-        return jsonify({"error": "Please add a note about the service you'd like"}), 400
+    if not service_note or len(service_note) > 500:
+        return jsonify({"error": "Please add a note about the service you'd like (max 500 characters)"}), 400
 
     with _lock:
         full_data = _load_data()
@@ -362,7 +416,7 @@ def api_checkin():
             "duration_minutes": None,
             "confirmed": False,
             "confirm_token": uuid.uuid4().hex,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_at": salon_now().isoformat(timespec="seconds"),
             "note": "",
         }
         checkins.append(record)
@@ -384,7 +438,7 @@ def api_checkin():
 
 @app.route("/api/checkins")
 def api_checkins():
-    date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    date_str = request.args.get("date") or salon_now().strftime("%Y-%m-%d")
     with _lock:
         data = _load_data()
         checkins = data.get("checkins", [])
@@ -394,8 +448,11 @@ def api_checkins():
 
 
 @app.route("/api/checkins/<checkin_id>/status", methods=["POST"])
-@limiter.limit("30 per hour")
+@csrf.exempt
 def api_update_status(checkin_id):
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     if new_status not in STATUSES:
@@ -406,17 +463,27 @@ def api_update_status(checkin_id):
         checkins = full_data.get("checkins", [])
         for c in checkins:
             if c["id"] == checkin_id:
+                old_status = c.get("status")
                 c["status"] = new_status
                 full_data["checkins"] = checkins
                 _save_data(full_data)
+                _log_audit(
+                    "status_change",
+                    "success",
+                    request.remote_addr,
+                    {"checkin_id": checkin_id, "from": old_status, "to": new_status},
+                )
                 return jsonify({"checkin": c})
 
     return jsonify({"error": "Check-in not found"}), 404
 
 
 @app.route("/api/checkins/<checkin_id>/confirm-duration", methods=["POST"])
-@limiter.limit("30 per hour")
+@csrf.exempt
 def api_confirm_duration(checkin_id):
+    if not session.get("staff_authenticated"):
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
     try:
         duration = int(data.get("duration_minutes"))
@@ -437,6 +504,13 @@ def api_confirm_duration(checkin_id):
         checkin["status"] = "confirmed"
         full_data["checkins"] = checkins
         _save_data(full_data)
+
+    _log_audit(
+        "confirm_duration",
+        "success",
+        request.remote_addr,
+        {"checkin_id": checkin_id, "duration": duration, "customer": checkin.get("name")},
+    )
 
     send_sms(
         checkin.get("phone"),
@@ -467,7 +541,7 @@ def owner_confirm_page(checkin_id):
 
 
 @app.route("/api/owner/confirm/<checkin_id>", methods=["POST"])
-@limiter.limit("10 per hour")
+@csrf.exempt
 def api_owner_confirm(checkin_id):
     data = request.get_json(silent=True) or {}
     token = data.get("token", "")
@@ -501,14 +575,14 @@ def api_owner_confirm(checkin_id):
 
 
 @app.route("/api/checkin-by-staff", methods=["POST"])
-@limiter.limit("30 per hour")
+@csrf.exempt
 def api_checkin_by_staff():
     data = request.get_json(silent=True) or {}
-    name = sanitize_input((data.get("name") or "").strip())
+    name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()
     date_str = (data.get("date") or "").strip()
     time_str = (data.get("time") or "").strip()
-    service_note = sanitize_input((data.get("service_note") or "").strip())
+    service_note = (data.get("service_note") or "").strip()
     duration_minutes = data.get("duration_minutes")
 
     if not name:
@@ -544,7 +618,7 @@ def api_checkin_by_staff():
             "duration_minutes": duration_minutes,
             "confirmed": True,
             "confirm_token": uuid.uuid4().hex,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "created_at": salon_now().isoformat(timespec="seconds"),
         }
         checkins.append(record)
         full_data["checkins"] = checkins
@@ -590,7 +664,7 @@ def get_daily_report():
 
 
 @app.route("/api/daily-report", methods=["POST"])
-@limiter.limit("30 per hour")
+@csrf.exempt
 def save_daily_report():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -611,7 +685,7 @@ def save_daily_report():
             data["reports"][date] = {
                 "money_received": money,
                 "tips": tips,
-                "updated_at": datetime.now().isoformat()
+                "updated_at": salon_now().isoformat()
             }
             _save_data(data)
     except Exception as e:
@@ -675,7 +749,7 @@ def get_customer_history():
 
 
 @app.route("/api/send-checkin-link", methods=["POST"])
-@limiter.limit("20 per hour")
+@csrf.exempt
 def send_checkin_link():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -696,7 +770,7 @@ def send_checkin_link():
 
 
 @app.route("/api/send-bulk-sms", methods=["POST"])
-@limiter.limit("10 per hour")
+@csrf.exempt
 def send_bulk_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -724,7 +798,7 @@ def send_bulk_sms():
                     data["sms_log"] = []
                 data["sms_log"].append({
                     "count": sent_count,
-                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "timestamp": salon_now().isoformat(timespec="seconds"),
                     "reason": "Auto-send to 2+ week customers"
                 })
                 _save_data(data)
@@ -748,7 +822,7 @@ def get_weekly_report():
     except Exception:
         return jsonify({"days": []})
 
-    now = datetime.now()
+    now = salon_now()
     today = now.date()
     days_data = []
 
@@ -787,7 +861,7 @@ def get_monthly_report():
     except Exception:
         return jsonify({"weeks": []})
 
-    now = datetime.now()
+    now = salon_now()
     today = now.date()
     year = today.year
     month = today.month
@@ -884,14 +958,14 @@ def get_customers():
 
 
 @app.route("/api/customers/<phone>/update", methods=["POST"])
-@limiter.limit("30 per hour")
+@csrf.exempt
 def update_customer(phone):
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
-    nickname = sanitize_input((data.get("nickname") or "").strip())
-    note = sanitize_input((data.get("note") or "").strip())
+    nickname = (data.get("nickname") or "").strip()
+    note = (data.get("note") or "").strip()
 
     with _lock:
         full_data = _load_data()
@@ -930,7 +1004,7 @@ def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
         lines.append(f"Total,{money + tips}")
 
     elif date_type == "week":
-        now = datetime.now()
+        now = salon_now()
         today = now.date()
         lines.append("BÁO CÁO TUẦN - Weekly Report")
         lines.append(f"Week Ending,{today.strftime('%Y-%m-%d')}")
@@ -952,7 +1026,7 @@ def _generate_csv_report(checkins, reports, date_type="day", date_str=None):
         lines.append(f"Weekly Total,{week_total_money + week_total_tips}")
 
     elif date_type == "month":
-        now = datetime.now()
+        now = salon_now()
         lines.append("BÁO CÁO THÁNG - Monthly Report")
         lines.append(f"Month,{now.strftime('%B %Y')}")
         lines.append("")
@@ -988,7 +1062,7 @@ def export_daily_summary():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
 
-    date_str = request.args.get("date") or datetime.now().strftime("%Y-%m-%d")
+    date_str = request.args.get("date") or salon_now().strftime("%Y-%m-%d")
 
     with _lock:
         data = _load_data()
@@ -1015,7 +1089,7 @@ def export_weekly_summary():
 
     csv_content = _generate_csv_report(checkins, reports, "week")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = salon_now().strftime("%Y-%m-%d")
     return csv_content, 200, {
         "Content-Type": "text/csv",
         "Content-Disposition": f'attachment; filename="weekly-report-{today}.csv"'
@@ -1034,7 +1108,7 @@ def export_monthly_summary():
 
     csv_content = _generate_csv_report(checkins, reports, "month")
 
-    today = datetime.now().strftime("%Y-%m")
+    today = salon_now().strftime("%Y-%m")
     return csv_content, 200, {
         "Content-Type": "text/csv",
         "Content-Disposition": f'attachment; filename="monthly-report-{today}.csv"'
@@ -1042,7 +1116,7 @@ def export_monthly_summary():
 
 
 @app.route("/api/send-summary-sms", methods=["POST"])
-@limiter.limit("20 per hour")
+@csrf.exempt
 def send_summary_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -1050,7 +1124,7 @@ def send_summary_sms():
     data = request.get_json(silent=True) or {}
     report_type = data.get("type", "day")  # day, week, month
 
-    date_str = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+    date_str = data.get("date", salon_now().strftime("%Y-%m-%d"))
 
     base_url = get_base_url()
     if report_type == "day":

@@ -309,6 +309,22 @@
         }
     }
 
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to log out?')) {
+                try {
+                    const res = await fetch('/api/staff-logout', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.href = '/staff-login';
+                    }
+                } catch (e) {
+                    alert('Logout failed. Please try again.');
+                }
+            }
+        });
+    }
+
     dateInput.value = todayStr();
     addDateInput.value = todayStr();
     dateInput.addEventListener('change', loadQueueWithTimeline);

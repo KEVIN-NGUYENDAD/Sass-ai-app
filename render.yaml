@@ -1,32 +1,17 @@
 services:
-  # Backend (Flask API)
   - type: web
-    name: network-security-audit-backend
-    runtime: python
-    rootDir: salon-hub/backend
-    region: oregon
+    name: huong-pharmacy-ai-copilot
+    env: python
     plan: free
-    buildCommand: bash build.sh
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
-    envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: DEBUG
-        value: "False"
-      - key: CORS_ORIGINS
-        value: https://network-security-audit.onrender.com
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
 
-  # Frontend (React)
-  - type: static_site
-    name: network-security-audit-frontend
-    runtime: static
-    rootDir: salon-hub/frontend
-    region: global
+  - type: web
+    name: nail-salon-checkin
+    env: python
     plan: free
-    buildCommand: npm install && npm run build
-    staticPublishPath: build
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://network-security-audit-backend.onrender.com
-# CRITICAL REBUILD: Force clean build without Python cache at 2026-08-18 (fix password scoring 0-5 scale)
-# Clear __pycache__, .pyc, and pip cache to ensure new NIST algorithm loads correctly
+    rootDir: nail_salon_checkin
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    healthCheckTimeout: 20
