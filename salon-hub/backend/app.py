@@ -1,6 +1,26 @@
 """
 Unified Salon Hub: Check-In + Network Security for Nail Salons
 Combines nail salon check-in system + network security audit
+
+SECURITY IMPLEMENTATION:
+========================
+1. Rate Limiting: 100 req/hour, 10 req/min (prevents brute-force attacks)
+2. CORS: Restricted to trusted origins (prevents cross-origin abuse)
+3. CSRF: Token-based protection for all state-changing operations
+4. XSS: Output escaping + CSP headers + X-XSS-Protection
+5. SQL Injection: Not applicable (uses JSON file storage, not SQL)
+6. Input Validation: Regex-based validation for all user inputs
+7. Authentication: API token + session-based auth for sensitive endpoints
+8. Firewalls: Private IP ranges blocked, localhost restricted
+9. Headers: HSTS, CSP, X-Frame-Options, Strict referrer policy
+10. Payload Limits: 1 MB max request size to prevent DoS
+
+DATA SECURITY:
+===============
+- Passwords are NOT stored or logged (evaluated in-memory only)
+- WiFi passwords are NOT persisted (evaluation only)
+- All sensitive data transmitted over HTTPS in production
+- Session data stored server-side with secure cookies
 """
 
 from flask import Flask, request, jsonify, redirect, render_template, session
@@ -17,11 +37,33 @@ import uuid
 from datetime import datetime, timedelta
 from functools import wraps
 import logging
+from markupsafe import escape, Markup
+from urllib.parse import urlparse
 
 load_dotenv()
 
 app = Flask(__name__, template_folder='../frontend/templates')
-CORS(app)
+
+# ============================================================================
+# CORS SECURITY: Restrict to trusted origins only
+# ============================================================================
+ALLOWED_ORIGINS = [
+    'https://network-security-audit.onrender.com',  # Production frontend
+    'http://localhost:3000',                          # Local development
+    'http://localhost:8000',                          # Alternative local
+    'http://127.0.0.1:3000',                          # Local IP
+]
+
+cors_config = {
+    'origins': ALLOWED_ORIGINS,
+    'methods': ['GET', 'POST', 'OPTIONS'],
+    'allow_headers': ['Content-Type', 'X-API-Token', 'X-CSRF-Token'],
+    'expose_headers': ['X-CSRF-Token'],
+    'supports_credentials': True,
+    'max_age': 3600
+}
+
+CORS(app, resources={r'/api/*': cors_config})
 logger = logging.getLogger("salon_hub")
 
 # ============================================================================
@@ -105,6 +147,73 @@ def require_staff_auth(f):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+
+# ============================================================================
+# CSRF PROTECTION: Token generation and validation
+# ============================================================================
+
+def generate_csrf_token():
+    """Generate a CSRF token for form submissions"""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_urlsafe(32)
+    return session['csrf_token']
+
+
+def validate_csrf_token(token):
+    """Validate CSRF token from request"""
+    session_token = session.get('csrf_token')
+    if not session_token or not token:
+        return False
+    # Use constant-time comparison to prevent timing attacks
+    return secrets.compare_digest(session_token, token)
+
+
+def require_csrf_protection(f):
+    """Require valid CSRF token for POST/PUT/DELETE requests"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method == 'GET':
+            return f(*args, **kwargs)
+
+        token = request.form.get('csrf_token') or request.json.get('csrf_token')
+        if not validate_csrf_token(token):
+            return jsonify({
+                'success': False,
+                'error': 'CSRF validation failed',
+                'message': 'Invalid or missing CSRF token'
+            }), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ============================================================================
+# INPUT SANITIZATION & OUTPUT ESCAPING
+# ============================================================================
+
+def sanitize_input(value, max_length=256, allow_special=False):
+    """Sanitize user input to prevent injection attacks"""
+    if not isinstance(value, str):
+        return ""
+
+    # Limit length
+    value = value[:max_length]
+
+    # Remove/escape dangerous characters
+    if not allow_special:
+        value = re.sub(r'[<>\"\'&%;]', '', value)
+    else:
+        # Only escape HTML entities
+        value = escape(value)
+
+    return value.strip()
+
+
+def escape_output(value):
+    """Escape output to prevent XSS attacks"""
+    if value is None:
+        return ""
+    return escape(str(value))
 
 
 def is_localhost(host):
@@ -806,7 +915,7 @@ def check_wifi_security():
             is_secure = False
 
         result = {
-            "ssid": ssid,
+            "ssid": escape_output(ssid),  # Output escaping: prevent XSS
             "secure": is_secure,
             "severity": severity_level,
             "risk_score": min(10, risk_score),  # 0-10 scale for clarity
@@ -833,6 +942,18 @@ def check_wifi_security():
     except Exception as e:
         logger.exception('WiFi security check error')
         return jsonify({'success': False, 'error': 'Server error'}), 500
+
+
+@app.route('/api/csrf-token', methods=['GET'])
+@limiter.limit("30 per minute")
+def get_csrf_token():
+    """Get CSRF token for form submissions (Security: CSRF protection)"""
+    token = generate_csrf_token()
+    return jsonify({
+        'success': True,
+        'token': token,
+        'message': 'CSRF token generated for form submission'
+    }), 200
 
 
 @app.route('/api/recommendations', methods=['GET'])

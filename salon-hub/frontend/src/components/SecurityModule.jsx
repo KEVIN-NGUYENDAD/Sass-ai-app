@@ -69,6 +69,7 @@ const translations = {
 function SecurityModule({ apiToken, apiUrl }) {
   const [language, setLanguage] = useState('en');
   const [activeTab, setActiveTab] = useState('wifi');
+  const [csrfToken, setCsrfToken] = useState('');
   const [wifiData, setWifiData] = useState({
     ssid: '',
     password: ''
@@ -79,6 +80,22 @@ function SecurityModule({ apiToken, apiUrl }) {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Fetch CSRF token on component mount (Security: CSRF protection)
+  React.useEffect(() => {
+    const fetchCsrfToken = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/csrf-token`);
+        const data = await response.json();
+        if (data.token) {
+          setCsrfToken(data.token);
+        }
+      } catch (err) {
+        console.error('Failed to fetch CSRF token:', err);
+      }
+    };
+    fetchCsrfToken();
+  }, [apiUrl]);
 
   const t = translations[language];
 
@@ -122,9 +139,13 @@ function SecurityModule({ apiToken, apiUrl }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Token': apiToken
+          'X-API-Token': apiToken,
+          'X-CSRF-Token': csrfToken  // Security: CSRF protection
         },
-        body: JSON.stringify(wifiData)
+        body: JSON.stringify({
+          ...wifiData,
+          csrf_token: csrfToken  // Include in body as fallback
+        })
       });
 
       const data = await response.json();
@@ -165,9 +186,13 @@ function SecurityModule({ apiToken, apiUrl }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Token': apiToken
+          'X-API-Token': apiToken,
+          'X-CSRF-Token': csrfToken  // Security: CSRF protection
         },
-        body: JSON.stringify(passwordData)
+        body: JSON.stringify({
+          ...passwordData,
+          csrf_token: csrfToken  // Include in body as fallback
+        })
       });
 
       const data = await response.json();
