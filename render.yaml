@@ -6,7 +6,7 @@ services:
     rootDir: salon-hub/backend
     region: oregon
     plan: free
-    buildCommand: rm -rf __pycache__ *.pyc && pip cache purge && pip install -r requirements.txt
+    buildCommand: rm -rf __pycache__ *.pyc .pytest_cache && pip cache purge && pip install --no-cache-dir -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: FLASK_ENV
