@@ -19,16 +19,32 @@ from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, render_template, request, session, redirect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
 app.config["PERMANENT_SESSION_LIFETIME"] = 1800  # 30 minutes session timeout
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 logger = logging.getLogger("nail_salon_checkin")
 
+csrf = CSRFProtect(app)
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 # Configured with CHAIRS_PER_SLOT = 1, SMS confirmation flow, staff auth, and blue theme
+
+# --- Security Headers -------------------------------------------------------
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # --- Configuration -----------------------------------------------------
 SALON_TIMEZONE = os.environ.get("SALON_TIMEZONE", "America/Los_Angeles")
@@ -268,6 +284,7 @@ def staff_login_page():
 
 @app.route("/api/staff-login", methods=["POST"])
 @limiter.limit("5 per minute")
+@csrf.exempt
 def api_staff_login():
     """Staff login with rate limiting (5 attempts per minute)."""
     data = request.get_json(silent=True) or {}
@@ -285,6 +302,7 @@ def api_staff_login():
 
 
 @app.route("/api/staff-logout", methods=["POST"])
+@csrf.exempt
 def api_staff_logout():
     """Safe logout: clear session and log the action."""
     if session.get("staff_authenticated"):
@@ -347,6 +365,7 @@ def api_slots():
 
 
 @app.route("/api/checkin", methods=["POST"])
+@csrf.exempt
 def api_checkin():
     """Handle customer check-in with thread-safe concurrency control.
 
@@ -429,6 +448,7 @@ def api_checkins():
 
 
 @app.route("/api/checkins/<checkin_id>/status", methods=["POST"])
+@csrf.exempt
 def api_update_status(checkin_id):
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -459,6 +479,7 @@ def api_update_status(checkin_id):
 
 
 @app.route("/api/checkins/<checkin_id>/confirm-duration", methods=["POST"])
+@csrf.exempt
 def api_confirm_duration(checkin_id):
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -520,6 +541,7 @@ def owner_confirm_page(checkin_id):
 
 
 @app.route("/api/owner/confirm/<checkin_id>", methods=["POST"])
+@csrf.exempt
 def api_owner_confirm(checkin_id):
     data = request.get_json(silent=True) or {}
     token = data.get("token", "")
@@ -553,6 +575,7 @@ def api_owner_confirm(checkin_id):
 
 
 @app.route("/api/checkin-by-staff", methods=["POST"])
+@csrf.exempt
 def api_checkin_by_staff():
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -641,6 +664,7 @@ def get_daily_report():
 
 
 @app.route("/api/daily-report", methods=["POST"])
+@csrf.exempt
 def save_daily_report():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -725,6 +749,7 @@ def get_customer_history():
 
 
 @app.route("/api/send-checkin-link", methods=["POST"])
+@csrf.exempt
 def send_checkin_link():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -745,6 +770,7 @@ def send_checkin_link():
 
 
 @app.route("/api/send-bulk-sms", methods=["POST"])
+@csrf.exempt
 def send_bulk_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -932,6 +958,7 @@ def get_customers():
 
 
 @app.route("/api/customers/<phone>/update", methods=["POST"])
+@csrf.exempt
 def update_customer(phone):
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
@@ -1089,6 +1116,7 @@ def export_monthly_summary():
 
 
 @app.route("/api/send-summary-sms", methods=["POST"])
+@csrf.exempt
 def send_summary_sms():
     if not session.get("staff_authenticated"):
         return jsonify({"error": "Unauthorized"}), 401
