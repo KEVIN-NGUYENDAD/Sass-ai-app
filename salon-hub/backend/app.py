@@ -719,6 +719,7 @@ def scan_ports():
 @require_auth
 @limiter.limit("10 per minute")
 def check_password_strength():
+    logger.info("🎯 NIST PASSWORD CHECK - COMMIT e35172a - NEW CODE RUNNING")
     """
     Check password strength (NIST SP 800-63B compliant)
 
